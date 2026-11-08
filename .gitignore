@@ -1,0 +1,22 @@
+# Local briefings — not for public GitHub
+ASSIGNMENT.md
+HANDOFF.md
+
+# Build / deps
+target/
+node_modules/
+dist/
+
+# Whisper models (large — download locally)
+models/
+*.bin
+*.ggml
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets
+.env
+.env.*
