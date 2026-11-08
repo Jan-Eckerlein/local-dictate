@@ -1,7 +1,3 @@
-# Local briefings — not for public GitHub
-ASSIGNMENT.md
-HANDOFF.md
-
 # Build / deps
 target/
 node_modules/
