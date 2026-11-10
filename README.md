@@ -1,7 +1,5 @@
-# Tauri + React + Typescript
+# local-dictate
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Work in progress — native **Tauri 2** desktop app: microphone capture, silence detection, local speech-to-text, paste into the active application via keyboard shortcut.
 
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+Implementation checklist: [`PLAN.md`](./PLAN.md). Build and usage instructions will be completed before submission.
