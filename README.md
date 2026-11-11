@@ -78,7 +78,7 @@ pnpm tauri dev
 ## Usage
 
 1. Pick a microphone (if several are listed).
-2. Adjust **VAD sensitivity**, **Whisper model** (tiny / base / small, file must exist on disk), and **Whisper language** (auto / German / English) — stored in app data (see [Settings](#settings)).
+2. Adjust **VAD sensitivity**, **Whisper model** (tiny / base / small, file must exist on disk), and **Whisper language** (default **German**; auto and English are also available) — stored in app data (see [Settings](#settings)).
 3. **Start monitoring**, speak in short phrases, pause between them.
 4. Focus another app and use a paste shortcut (or the UI buttons).
 

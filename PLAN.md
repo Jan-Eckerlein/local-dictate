@@ -67,7 +67,7 @@ flowchart TB
 | Topic      | Choice                            | Notes                                                                                 |
 | ---------- | --------------------------------- | ------------------------------------------------------------------------------------- |
 | Platform   | macOS                             | Windows documented as untested unless time allows                                     |
-| STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json       |
+| STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **de** by default (auto/en optional)  |
 | Model size | `base` (default)                  | Release bundles tiny+base+small; dev: `download-model` / `download-all-models`        |
 | VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                     |
 | Paste      | Clipboard + simulated ⌘V          | **⌘⇧V** / **⌘⇧B** / **⌘⇧A**; Accessibility required (macOS)                           |

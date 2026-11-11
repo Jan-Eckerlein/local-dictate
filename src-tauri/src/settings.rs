@@ -99,7 +99,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             vad_rms_threshold: VAD_RMS_THRESHOLD,
-            whisper_language: WhisperLanguage::Auto,
+            whisper_language: WhisperLanguage::De,
             whisper_model: WhisperModelFile::Base,
         }
     }
