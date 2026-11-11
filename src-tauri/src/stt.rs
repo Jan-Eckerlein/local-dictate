@@ -1,3 +1,4 @@
+use crate::settings::{SettingsState, WhisperLanguage};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
@@ -42,7 +43,7 @@ impl WhisperEngine {
     }
 
     /// 16 kHz mono f32 PCM (same format as VAD segments).
-    pub fn transcribe(&self, samples: &[f32]) -> Result<String, String> {
+    pub fn transcribe(&self, samples: &[f32], language: WhisperLanguage) -> Result<String, String> {
         if samples.is_empty() {
             return Err("audio is empty".into());
         }
@@ -53,8 +54,7 @@ impl WhisperEngine {
             .map_err(|e| format!("whisper state: {e}"))?;
 
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-        // `None` = auto-detect (EN stays EN). Forcing `de` makes English sound like muddy German text.
-        params.set_language(None);
+        params.set_language(language.as_whisper_lang());
         params.set_translate(false);
         params.set_print_special(false);
         params.set_print_progress(false);
@@ -125,7 +125,8 @@ impl SttState {
         Ok(())
     }
 
-    pub fn transcribe(&self, samples: &[f32]) -> Result<String, String> {
+    pub fn transcribe(&self, samples: &[f32], settings: &SettingsState) -> Result<String, String> {
+        let language = settings.get()?.whisper_language;
         self.ensure_loaded()?;
         let guard = self
             .engine
@@ -134,6 +135,6 @@ impl SttState {
         let engine = guard
             .as_ref()
             .ok_or_else(|| "whisper not loaded".to_string())?;
-        engine.transcribe(samples)
+        engine.transcribe(samples, language)
     }
 }

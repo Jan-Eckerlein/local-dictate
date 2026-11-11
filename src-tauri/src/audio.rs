@@ -160,6 +160,7 @@ pub fn start_monitor(
     device_name: Option<String>,
     session_segments: Arc<StdMutex<Vec<Vec<f32>>>>,
     stt_tx: Sender<SttJob>,
+    vad_rms_threshold: f32,
 ) -> Result<AudioMonitorInfo, String> {
     let host = cpal::default_host();
     let device = resolve_input_device(&host, device_name.as_deref())?;
@@ -201,8 +202,9 @@ pub fn start_monitor(
     let app_vad = app.clone();
     let segments_store = session_segments;
     let stt_tx = stt_tx;
+    let vad_rms = vad_rms_threshold;
     thread::spawn(move || {
-        let mut vad = VadProcessor::new();
+        let mut vad = VadProcessor::with_rms_threshold(vad_rms);
         while !stop_vad.load(Ordering::Relaxed) {
             match chunk_rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(chunk) => {

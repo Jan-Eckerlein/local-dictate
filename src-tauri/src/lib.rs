@@ -2,11 +2,13 @@ mod audio;
 mod macos_mic;
 mod replay;
 mod segment;
+mod settings;
 mod stt;
 mod stt_worker;
 
 use audio::{list_input_devices, start_monitor, stop_monitor, AudioMonitorInfo, InputDeviceInfo};
 use segment::AudioSegmentPayload;
+use settings::{AppSettings, SettingsState, WhisperLanguage};
 use stt::{SttState, WhisperModelInfo};
 use stt_worker::{spawn_stt_worker, SttJob};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -66,6 +68,20 @@ fn list_input_audio_devices() -> Result<Vec<InputDeviceInfo>, String> {
 }
 
 #[tauri::command]
+fn get_app_settings(settings: State<'_, SettingsState>) -> Result<AppSettings, String> {
+    settings.get()
+}
+
+#[tauri::command]
+fn update_app_settings(
+    vad_rms_threshold: Option<f32>,
+    whisper_language: Option<WhisperLanguage>,
+    settings: State<'_, SettingsState>,
+) -> Result<AppSettings, String> {
+    settings.update(vad_rms_threshold, whisper_language)
+}
+
+#[tauri::command]
 fn list_session_segments(
     state: State<'_, Mutex<AudioMonitorState>>,
 ) -> Result<Vec<SessionSegmentSummary>, String> {
@@ -101,6 +117,7 @@ fn transcribe_session_segment(
     index: usize,
     state: State<'_, Mutex<AudioMonitorState>>,
     stt: State<'_, Arc<SttState>>,
+    settings: State<'_, SettingsState>,
 ) -> Result<TranscriptResult, String> {
     let guard = state
         .lock()
@@ -121,7 +138,7 @@ fn transcribe_session_segment(
             .ok_or_else(|| format!("segment index out of range: {index}"))?
     };
 
-    let text = stt.transcribe(&samples)?;
+    let text = stt.transcribe(&samples, &settings)?;
     Ok(TranscriptResult {
         segment_index: index,
         text,
@@ -168,6 +185,7 @@ fn start_audio_monitor(
     app: tauri::AppHandle,
     state: State<'_, Mutex<AudioMonitorState>>,
     inbox: State<'_, SttInbox>,
+    settings: State<'_, SettingsState>,
     device_name: Option<String>,
 ) -> Result<AudioMonitorInfo, String> {
     let mut guard = state
@@ -189,6 +207,7 @@ fn start_audio_monitor(
         .map_err(|_| "session segments lock poisoned".to_string())?
         .clear();
 
+    let vad_rms_threshold = settings.get()?.vad_rms_threshold;
     let stop = Arc::new(AtomicBool::new(false));
     let info = start_monitor(
         app,
@@ -196,6 +215,7 @@ fn start_audio_monitor(
         device_name,
         guard.session_segments.clone(),
         inbox.tx.clone(),
+        vad_rms_threshold,
     )?;
     guard.stop = Some(stop);
     Ok(info)
@@ -220,8 +240,15 @@ pub fn run() {
         .setup(|app| {
             let (tx, rx) = mpsc::channel::<SttJob>();
             let stt = Arc::new(SttState::new());
-            spawn_stt_worker(app.handle().clone(), stt.clone(), rx);
+            let settings = SettingsState::load(app.handle())?;
+            spawn_stt_worker(
+                app.handle().clone(),
+                stt.clone(),
+                settings.clone(),
+                rx,
+            );
             app.manage(stt);
+            app.manage(settings);
             app.manage(SttInbox { tx });
             app.manage(Mutex::new(AudioMonitorState::new()));
             Ok(())
@@ -230,6 +257,8 @@ pub fn run() {
             mic_permission_status,
             open_microphone_settings,
             list_input_audio_devices,
+            get_app_settings,
+            update_app_settings,
             list_session_segments,
             whisper_model_info,
             transcribe_session_segment,

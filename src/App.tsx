@@ -55,6 +55,13 @@ interface TranscriptErrorPayload {
   message: string;
 }
 
+type WhisperLanguage = "auto" | "de" | "en";
+
+interface AppSettings {
+  vadRmsThreshold: number;
+  whisperLanguage: WhisperLanguage;
+}
+
 function App() {
   const [monitoring, setMonitoring] = useState(false);
   const [level, setLevel] = useState(0);
@@ -71,6 +78,7 @@ function App() {
   const [transcripts, setTranscripts] = useState<Record<number, string>>({});
   const [whisperModel, setWhisperModel] = useState<WhisperModelInfo | null>(null);
   const [sttPendingIndex, setSttPendingIndex] = useState<number | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 
   const refreshMicStatus = useCallback(() => {
     void invoke<string>("mic_permission_status").then(setMicStatus);
@@ -79,7 +87,26 @@ function App() {
   useEffect(() => {
     refreshMicStatus();
     void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
+    void invoke<AppSettings>("get_app_settings").then(setAppSettings);
   }, [refreshMicStatus]);
+
+  const updateVadThreshold = useCallback(async (vadRmsThreshold: number) => {
+    try {
+      const next = await invoke<AppSettings>("update_app_settings", { vadRmsThreshold });
+      setAppSettings(next);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  const updateWhisperLanguage = useCallback(async (whisperLanguage: WhisperLanguage) => {
+    try {
+      const next = await invoke<AppSettings>("update_app_settings", { whisperLanguage });
+      setAppSettings(next);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
 
   const loadDevices = useCallback(async () => {
     try {
@@ -259,6 +286,40 @@ function App() {
             ))}
           </select>
         </label>
+      )}
+
+      {appSettings && (
+        <section className="settings-block" aria-label="App settings">
+          <p className="device-select-label">Settings</p>
+          <label className="settings-row">
+            <span>
+              VAD sensitivity ({appSettings.vadRmsThreshold.toFixed(3)})
+            </span>
+            <input
+              type="range"
+              min={0.002}
+              max={0.05}
+              step={0.001}
+              value={appSettings.vadRmsThreshold}
+              disabled={monitoring}
+              onChange={(e) => void updateVadThreshold(Number(e.target.value))}
+            />
+          </label>
+          {monitoring && (
+            <p className="hint">VAD threshold applies on the next monitoring start.</p>
+          )}
+          <label className="settings-row">
+            <span>Whisper language</span>
+            <select
+              value={appSettings.whisperLanguage}
+              onChange={(e) => void updateWhisperLanguage(e.target.value as WhisperLanguage)}
+            >
+              <option value="auto">Auto</option>
+              <option value="de">German</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+        </section>
       )}
 
       <div className="meter" aria-label="Microphone level">

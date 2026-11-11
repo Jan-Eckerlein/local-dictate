@@ -67,9 +67,9 @@ flowchart TB
 | Topic      | Choice                            | Notes                                                                                |
 | ---------- | --------------------------------- | ------------------------------------------------------------------------------------ |
 | Platform   | macOS                             | Windows documented as untested unless time allows                                    |
-| STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; **auto-detect** until **#8** language setting   |
+| STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json      |
 | Model size | `base` (default)                  | `small` as optional upgrade in README                                                |
-| VAD        | RMS + silence hang + max duration | Default RMS **0.008** in code; user threshold at **#8** (see milestones)             |
+| VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                 |
 | Paste      | Clipboard + simulated ⌘V          | Accessibility permission likely required                                             |
 | UI         | Small window + meter              | Minimal HTML/CSS for milestones 4–9; **shadcn** + Tailwind at **#10**; tray deferred |
 
@@ -94,7 +94,7 @@ Each step should compile or be an obvious WIP milestone.
 | 5   | cpal replay after stop                                              | done                |
 | 6   | `whisper-rs` + model download script                                | done                |
 | 7   | Auto STT pipeline: VAD segment → `mpsc` whisper worker → live transcript (no manual Transcribe) | done |
-| 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en) | todo        |
+| 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en) | done        |
 | 9   | Global shortcut + paste (TextEdit / Notes test)                     | todo                |
 | 10  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | todo                |
 | 11  | UI state machine + error / permission hints                         | todo                |

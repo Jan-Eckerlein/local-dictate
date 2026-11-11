@@ -1,3 +1,4 @@
+use crate::settings::SettingsState;
 use crate::stt::SttState;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
@@ -23,10 +24,15 @@ pub struct TranscriptErrorPayload {
     pub message: String,
 }
 
-pub fn spawn_stt_worker(app: AppHandle, stt: Arc<SttState>, rx: Receiver<SttJob>) {
+pub fn spawn_stt_worker(
+    app: AppHandle,
+    stt: Arc<SttState>,
+    settings: SettingsState,
+    rx: Receiver<SttJob>,
+) {
     thread::spawn(move || {
         while let Ok(job) = rx.recv() {
-            match stt.transcribe(&job.samples) {
+            match stt.transcribe(&job.samples, &settings) {
                 Ok(text) => {
                     let payload = TranscriptReadyPayload {
                         segment_index: job.index,

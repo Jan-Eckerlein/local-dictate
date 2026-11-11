@@ -114,8 +114,14 @@ pub struct VadProcessor {
 
 impl VadProcessor {
     pub fn new() -> Self {
+        Self::with_rms_threshold(VAD_RMS_THRESHOLD)
+    }
+
+    pub fn with_rms_threshold(rms_threshold: f32) -> Self {
+        let mut config = VadConfig::default();
+        config.rms_threshold = rms_threshold;
         Self {
-            config: VadConfig::default(),
+            config,
             pending: Vec::new(),
             recording: false,
             recording_buffer: Vec::new(),
