@@ -1,7 +1,25 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
-import "./App.css";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 
 interface AudioMonitorInfo {
   sampleRate: number;
@@ -316,224 +334,280 @@ function App() {
   const pct = Math.round(Math.min(1, level) * 100);
 
   return (
-    <main className="container">
-      <h1>local-dictate</h1>
-      <p className="subtitle">
-        VAD → local Whisper · paste shortcuts: ⌘⇧V last · ⌘⇧B since last batch · ⌘⇧A all
-      </p>
+    <main className="mx-auto flex w-full max-w-lg flex-col gap-4 p-4 pb-8">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">local-dictate</h1>
+        <p className="text-muted-foreground text-sm">
+          VAD → local Whisper · ⌘⇧V last · ⌘⇧B batch · ⌘⇧A all
+        </p>
+      </header>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {!micAuthorized && (
-        <div className="permission-block">
-          <p className="hint">
-            Microphone: <strong>{micStatus || "…"}</strong>
-            {micStatus === "denied" && " — enable Cursor/Terminal or this app in System Settings."}
-          </p>
-          <button type="button" onClick={openSettings}>
-            Open microphone settings
-          </button>
-        </div>
+        <Alert>
+          <AlertTitle>Microphone: {micStatus || "…"}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            {micStatus === "denied" &&
+              "Enable Cursor/Terminal or this app in System Settings → Privacy → Microphone."}
+            <Button type="button" variant="secondary" size="sm" onClick={openSettings}>
+              Open microphone settings
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       {!axAuthorized && (
-        <div className="permission-block">
-          <p className="hint">
-            Accessibility: <strong>{axStatus || "…"}</strong>
-            {axStatus === "denied" &&
-              " — required to paste into TextEdit, Notes, etc. Enable local-dictate in Accessibility."}
-          </p>
-          <button type="button" onClick={openAxSettings}>
-            Open accessibility settings
-          </button>
-        </div>
+        <Alert>
+          <AlertTitle>Accessibility: {axStatus || "…"}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            Required to paste into TextEdit, Notes, Cursor, etc.
+            <Button type="button" variant="secondary" size="sm" onClick={openAxSettings}>
+              Open accessibility settings
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
-      <section className="paste-block" aria-label="Paste transcripts">
-        <p className="hint">
-          Latest segment:{" "}
-          <strong>{latestTranscript ? latestTranscript.slice(0, 120) : "none yet"}</strong>
-        </p>
-        <div className="paste-actions">
-          <button
+      {whisperModel && !whisperModel.exists && (
+        <Alert variant="destructive">
+          <AlertTitle>Whisper model missing</AlertTitle>
+          <AlertDescription>
+            Run <code className="text-sm">pnpm download-model</code>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Paste</CardTitle>
+          <CardDescription>
+            Latest:{" "}
+            <span className="text-foreground font-medium">
+              {latestTranscript ? latestTranscript.slice(0, 120) : "none yet"}
+            </span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={pasteBusy || !latestTranscript}
             onClick={() => void runPaste("paste_last_transcript")}
           >
-            {pasteBusy ? "…" : "Last (⌘⇧V)"}
-          </button>
-          <button
+            Last (⌘⇧V)
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={pasteBusy || !latestTranscript}
             onClick={() => void runPaste("paste_since_last_copy")}
           >
-            {pasteBusy ? "…" : "Since last batch (⌘⇧B)"}
-          </button>
-          <button
+            Batch (⌘⇧B)
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={pasteBusy || !latestTranscript}
             onClick={() => void runPaste("paste_all_transcripts")}
           >
-            {pasteBusy ? "…" : "All (⌘⇧A)"}
-          </button>
-        </div>
-        <p className="hint">
-          Each segment still auto-copies when transcribed — ⌘V works for the newest line only.
-        </p>
-      </section>
+            All (⌘⇧A)
+          </Button>
+        </CardContent>
+      </Card>
 
       {devices.length > 0 && (
-        <label className="device-select">
-          <span className="device-select-label">Input</span>
-          <select
-            value={selectedDevice}
-            disabled={monitoring}
-            onChange={(e) => setSelectedDevice(e.target.value)}
-          >
-            {devices.map((d) => (
-              <option key={d.name} value={d.name}>
-                {d.name}
-                {d.isDefault ? " (system default)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Input</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={selectedDevice}
+              onValueChange={(v) => {
+                if (v) setSelectedDevice(v);
+              }}
+              disabled={monitoring}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select microphone" />
+              </SelectTrigger>
+              <SelectContent>
+                {devices.map((d) => (
+                  <SelectItem key={d.name} value={d.name}>
+                    {d.name}
+                    {d.isDefault ? " (default)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
       )}
 
       {appSettings && (
-        <section className="settings-block" aria-label="App settings">
-          <p className="device-select-label">Settings</p>
-          <label className="settings-row">
-            <span>
-              VAD sensitivity ({appSettings.vadRmsThreshold.toFixed(3)})
-            </span>
-            <input
-              type="range"
-              min={0.002}
-              max={0.05}
-              step={0.001}
-              value={appSettings.vadRmsThreshold}
-              disabled={monitoring}
-              onChange={(e) => void updateVadThreshold(Number(e.target.value))}
-            />
-          </label>
-          {monitoring && (
-            <p className="hint">VAD threshold applies on the next monitoring start.</p>
-          )}
-          <label className="settings-row">
-            <span>Whisper language</span>
-            <select
-              value={appSettings.whisperLanguage}
-              onChange={(e) => void updateWhisperLanguage(e.target.value as WhisperLanguage)}
-            >
-              <option value="auto">Auto</option>
-              <option value="de">German</option>
-              <option value="en">English</option>
-            </select>
-          </label>
-        </section>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Settings</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>
+                VAD sensitivity ({appSettings.vadRmsThreshold.toFixed(3)})
+              </Label>
+              <Slider
+                min={0.002}
+                max={0.05}
+                step={0.001}
+                disabled={monitoring}
+                value={[appSettings.vadRmsThreshold]}
+                onValueChange={(v) => {
+                  const next = Array.isArray(v) ? v[0] : v;
+                  void updateVadThreshold(next ?? 0.008);
+                }}
+              />
+              {monitoring && (
+                <p className="text-muted-foreground text-xs">
+                  VAD threshold applies on the next monitoring start.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whisper-lang">Whisper language</Label>
+              <Select
+                value={appSettings.whisperLanguage}
+                onValueChange={(v) => void updateWhisperLanguage(v as WhisperLanguage)}
+              >
+                <SelectTrigger id="whisper-lang" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="de">German</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="meter" aria-label="Microphone level">
-        <div className="meter-fill" style={{ width: `${pct}%` }} />
+      <div className="space-y-1">
+        <div
+          className="bg-muted h-2 w-full overflow-hidden rounded-full"
+          aria-label="Microphone level"
+        >
+          <div
+            className="bg-primary h-full transition-[width] duration-75"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="text-muted-foreground text-center text-xs">{pct}%</p>
       </div>
-      <p className="meter-label">{pct}%</p>
 
-      <div className="row actions">
-        {!monitoring ? (
-          <button type="button" onClick={() => void start()}>
-            Start monitoring
-          </button>
-        ) : (
-          <button type="button" onClick={() => void stop()}>
-            Stop
-          </button>
-        )}
-      </div>
+      <Button
+        type="button"
+        className="w-full"
+        size="lg"
+        variant={monitoring ? "secondary" : "default"}
+        onClick={() => void (monitoring ? stop() : start())}
+      >
+        {monitoring ? "Stop monitoring" : "Start monitoring"}
+      </Button>
 
       {info && (
-        <p className="device-info">
-          {info.deviceName}
-          <br />
-          {info.sampleRate} Hz · {info.channels} ch · {info.sampleFormat}
+        <p className="text-muted-foreground text-center text-xs">
+          {info.deviceName} · {info.sampleRate} Hz · {info.channels} ch · {info.sampleFormat}
         </p>
       )}
 
       {monitoring && (
-        <section className="live-stt" aria-live="polite">
-          <p className="segment-info">
-            Segments: {segmentCount}
-            {sttPendingIndex !== null && transcripts[sttPendingIndex] === undefined && (
-              <> · transcribing #{sttPendingIndex + 1}…</>
-            )}
-            {lastSegment && (
-              <>
-                <br />
-                Last: {lastSegment.durationSecs.toFixed(2)} s · {lastSegment.sampleCount} samples @{" "}
-                {lastSegment.sampleRate} Hz
-              </>
-            )}
-          </p>
+        <Card aria-live="polite">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Live transcript</CardTitle>
+            <CardDescription>
+              Segments: {segmentCount}
+              {sttPendingIndex !== null && transcripts[sttPendingIndex] === undefined && (
+                <> · transcribing #{sttPendingIndex + 1}…</>
+              )}
+              {lastSegment && (
+                <>
+                  {" "}
+                  · last {lastSegment.durationSecs.toFixed(2)} s
+                </>
+              )}
+            </CardDescription>
+          </CardHeader>
           {Object.keys(transcripts).length > 0 && (
-            <ul className="live-transcript-list">
+            <CardContent className="space-y-2">
               {Object.entries(transcripts)
                 .map(([idx, text]) => ({ index: Number(idx), text }))
                 .sort((a, b) => a.index - b.index)
                 .map((row) => (
-                  <li key={row.index}>
-                    <span className="live-transcript-label">#{row.index + 1}</span> {row.text}
-                  </li>
+                  <p key={row.index} className="text-sm leading-snug">
+                    <span className="text-muted-foreground">#{row.index + 1}</span> {row.text}
+                  </p>
                 ))}
-            </ul>
+            </CardContent>
           )}
-        </section>
-      )}
-
-      {whisperModel && !whisperModel.exists && (
-        <p className="hint">
-          Whisper model missing — run <code>pnpm download-model</code>
-        </p>
+        </Card>
       )}
 
       {!monitoring && sessionSegments.length > 0 && (
-        <section className="segment-replay" aria-label="Session segments">
-          <p className="segment-replay-title">Session segments (16 kHz)</p>
-          <ul className="segment-list">
+        <Card aria-label="Session segments">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Session segments (debug)</CardTitle>
+            <CardDescription>16 kHz · replay / manual transcribe</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
             {sessionSegments.map((seg) => (
-              <li key={seg.index}>
-                <div className="segment-list-main">
-                  <span className="segment-list-label">
+              <div key={seg.index} className="space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <h3 className="text-sm font-medium">
                     #{seg.index + 1} — {seg.durationSecs.toFixed(2)} s
-                  </span>
-                  {transcripts[seg.index] && (
-                    <p className="segment-transcript">{transcripts[seg.index]}</p>
-                  )}
+                  </h3>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={replayingIndex !== null || transcribingIndex !== null}
+                      onClick={() => void replaySegment(seg.index)}
+                    >
+                      {replayingIndex === seg.index ? "Playing…" : "Replay"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        replayingIndex !== null ||
+                        transcribingIndex !== null ||
+                        !whisperModel?.exists
+                      }
+                      onClick={() => void transcribeSegment(seg.index)}
+                    >
+                      {transcribingIndex === seg.index ? "STT…" : "Transcribe"}
+                    </Button>
+                  </div>
                 </div>
-                <span className="segment-list-actions">
-                  <button
-                    type="button"
-                    disabled={replayingIndex !== null || transcribingIndex !== null}
-                    onClick={() => void replaySegment(seg.index)}
-                  >
-                    {replayingIndex === seg.index ? "Playing…" : "Replay"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      replayingIndex !== null ||
-                      transcribingIndex !== null ||
-                      !whisperModel?.exists
-                    }
-                    onClick={() => void transcribeSegment(seg.index)}
-                  >
-                    {transcribingIndex === seg.index ? "STT…" : "Transcribe"}
-                  </button>
-                </span>
-              </li>
+                {transcripts[seg.index] && (
+                  <p className="text-muted-foreground text-sm">{transcripts[seg.index]}</p>
+                )}
+                {seg.index < sessionSegments.length - 1 && <Separator />}
+              </div>
             ))}
-          </ul>
-        </section>
+          </CardContent>
+        </Card>
       )}
-
-      {error && <p className="error">{error}</p>}
     </main>
   );
 }

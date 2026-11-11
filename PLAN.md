@@ -98,7 +98,7 @@ Each step should compile or be an obvious WIP milestone.
 | 9   | Global shortcut + paste (TextEdit / Notes test)                     | done                |
 | 10  | VAD **pre-roll** (~300 ms) + **speech onset** (3×20 ms frames) before record | done        |
 | 11  | **Peak normalize** quiet segments before Whisper (`normalize_peak_for_stt`)   | done        |
-| 12  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | todo                |
+| 12  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | done                |
 | 13  | UI state machine + error / permission hints                         | todo                |
 | 14  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo                |
 | 15  | Release build (`pnpm tauri build`) + known limitations              | todo                |

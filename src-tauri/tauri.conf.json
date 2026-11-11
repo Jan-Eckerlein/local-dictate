@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "local-dictate",
-        "width": 480,
-        "height": 520
+        "width": 440,
+        "height": 640
       }
     ],
     "security": {
