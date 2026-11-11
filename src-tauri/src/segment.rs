@@ -19,6 +19,25 @@ pub const VAD_PREROLL_MS: u32 = 300;
 /// Consecutive speech frames required before recording starts.
 pub const VAD_SPEECH_ONSET_FRAMES: u32 = 3;
 
+/// Peak-normalize quiet segments before Whisper (skip if already loud or near-silent).
+pub const STT_NORMALIZE_PEAK_TARGET: f32 = 0.9;
+/// Below this peak → scale up toward `STT_NORMALIZE_PEAK_TARGET`.
+pub const STT_NORMALIZE_SKIP_ABOVE: f32 = 0.5;
+pub const STT_NORMALIZE_SILENCE_PEAK: f32 = 1e-5;
+
+/// Scale f32 PCM toward `STT_NORMALIZE_PEAK_TARGET` when the segment is quiet but not silent.
+pub fn normalize_peak_for_stt(samples: &[f32]) -> Vec<f32> {
+    let peak = samples.iter().map(|s| s.abs()).fold(0.0_f32, f32::max);
+    if peak < STT_NORMALIZE_SILENCE_PEAK || peak >= STT_NORMALIZE_SKIP_ABOVE {
+        return samples.to_vec();
+    }
+    let gain = STT_NORMALIZE_PEAK_TARGET / peak;
+    samples
+        .iter()
+        .map(|&s| (s * gain).clamp(-1.0, 1.0))
+        .collect()
+}
+
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioSegmentPayload {
@@ -239,6 +258,21 @@ mod tests {
         let s = vec![0.0_f32; 4800];
         let out = resample_linear(&s, 48_000, 16_000);
         assert_eq!(out.len(), 1600);
+    }
+
+    #[test]
+    fn normalize_quiet_segment() {
+        let quiet = vec![0.05_f32; 400];
+        let out = normalize_peak_for_stt(&quiet);
+        let peak = out.iter().map(|s| s.abs()).fold(0.0_f32, f32::max);
+        assert!((peak - STT_NORMALIZE_PEAK_TARGET).abs() < 0.01);
+    }
+
+    #[test]
+    fn normalize_skips_loud_segment() {
+        let loud = vec![0.8_f32; 400];
+        let out = normalize_peak_for_stt(&loud);
+        assert_eq!(out, loud);
     }
 
     #[test]

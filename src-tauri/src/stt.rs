@@ -1,3 +1,4 @@
+use crate::segment::normalize_peak_for_stt;
 use crate::settings::{SettingsState, WhisperLanguage};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -48,6 +49,8 @@ impl WhisperEngine {
             return Err("audio is empty".into());
         }
 
+        let samples = normalize_peak_for_stt(samples);
+
         let mut state = self
             .ctx
             .create_state()
@@ -67,7 +70,7 @@ impl WhisperEngine {
         );
 
         state
-            .full(params, samples)
+            .full(params, &samples)
             .map_err(|e| format!("whisper inference: {e}"))?;
 
         let mut text = String::new();
