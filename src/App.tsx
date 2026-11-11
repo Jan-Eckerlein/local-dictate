@@ -34,6 +34,17 @@ interface SessionSegmentSummary {
   durationSecs: number;
 }
 
+interface WhisperModelInfo {
+  path: string;
+  exists: boolean;
+  loaded: boolean;
+}
+
+interface TranscriptResult {
+  segmentIndex: number;
+  text: string;
+}
+
 function App() {
   const [monitoring, setMonitoring] = useState(false);
   const [level, setLevel] = useState(0);
@@ -46,6 +57,9 @@ function App() {
   const [segmentCount, setSegmentCount] = useState(0);
   const [sessionSegments, setSessionSegments] = useState<SessionSegmentSummary[]>([]);
   const [replayingIndex, setReplayingIndex] = useState<number | null>(null);
+  const [transcribingIndex, setTranscribingIndex] = useState<number | null>(null);
+  const [transcripts, setTranscripts] = useState<Record<number, string>>({});
+  const [whisperModel, setWhisperModel] = useState<WhisperModelInfo | null>(null);
 
   const refreshMicStatus = useCallback(() => {
     void invoke<string>("mic_permission_status").then(setMicStatus);
@@ -53,6 +67,7 @@ function App() {
 
   useEffect(() => {
     refreshMicStatus();
+    void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
   }, [refreshMicStatus]);
 
   const loadDevices = useCallback(async () => {
@@ -121,6 +136,7 @@ function App() {
       setLastSegment(null);
       setSegmentCount(0);
       setSessionSegments([]);
+      setTranscripts({});
       setMonitoring(true);
       refreshMicStatus();
     } catch (e) {
@@ -140,6 +156,20 @@ function App() {
       setSessionSegments(list);
     } catch (e) {
       setError(String(e));
+    }
+  }, []);
+
+  const transcribeSegment = useCallback(async (index: number) => {
+    setError(null);
+    setTranscribingIndex(index);
+    try {
+      const result = await invoke<TranscriptResult>("transcribe_session_segment", { index });
+      setTranscripts((prev) => ({ ...prev, [result.segmentIndex]: result.text }));
+      void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setTranscribingIndex(null);
     }
   }, []);
 
@@ -230,22 +260,46 @@ function App() {
         </p>
       )}
 
+      {whisperModel && !whisperModel.exists && (
+        <p className="hint">
+          Whisper model missing — run <code>pnpm download-model</code>
+        </p>
+      )}
+
       {!monitoring && sessionSegments.length > 0 && (
         <section className="segment-replay" aria-label="Session segments">
           <p className="segment-replay-title">Session segments (16 kHz)</p>
           <ul className="segment-list">
             {sessionSegments.map((seg) => (
               <li key={seg.index}>
-                <span className="segment-list-label">
-                  #{seg.index + 1} — {seg.durationSecs.toFixed(2)} s
+                <div className="segment-list-main">
+                  <span className="segment-list-label">
+                    #{seg.index + 1} — {seg.durationSecs.toFixed(2)} s
+                  </span>
+                  {transcripts[seg.index] && (
+                    <p className="segment-transcript">{transcripts[seg.index]}</p>
+                  )}
+                </div>
+                <span className="segment-list-actions">
+                  <button
+                    type="button"
+                    disabled={replayingIndex !== null || transcribingIndex !== null}
+                    onClick={() => void replaySegment(seg.index)}
+                  >
+                    {replayingIndex === seg.index ? "Playing…" : "Replay"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      replayingIndex !== null ||
+                      transcribingIndex !== null ||
+                      !whisperModel?.exists
+                    }
+                    onClick={() => void transcribeSegment(seg.index)}
+                  >
+                    {transcribingIndex === seg.index ? "STT…" : "Transcribe"}
+                  </button>
                 </span>
-                <button
-                  type="button"
-                  disabled={replayingIndex !== null}
-                  onClick={() => void replaySegment(seg.index)}
-                >
-                  {replayingIndex === seg.index ? "Playing…" : "Replay"}
-                </button>
               </li>
             ))}
           </ul>

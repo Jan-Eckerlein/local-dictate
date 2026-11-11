@@ -94,9 +94,28 @@
 
 .segment-list li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.segment-list-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.segment-list-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.segment-transcript {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  text-align: left;
 }
 
 .segment-list-label {

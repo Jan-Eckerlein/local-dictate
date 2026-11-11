@@ -2,12 +2,21 @@ mod audio;
 mod macos_mic;
 mod replay;
 mod segment;
+mod stt;
 
 use audio::{list_input_devices, start_monitor, stop_monitor, AudioMonitorInfo, InputDeviceInfo};
 use segment::AudioSegmentPayload;
+use stt::{SttState, WhisperModelInfo};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::State;
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TranscriptResult {
+    segment_index: usize,
+    text: String,
+}
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,6 +81,43 @@ fn list_session_segments(
             }
         })
         .collect())
+}
+
+#[tauri::command]
+fn whisper_model_info(stt: State<'_, SttState>) -> WhisperModelInfo {
+    stt.model_info()
+}
+
+#[tauri::command]
+fn transcribe_session_segment(
+    index: usize,
+    state: State<'_, Mutex<AudioMonitorState>>,
+    stt: State<'_, SttState>,
+) -> Result<TranscriptResult, String> {
+    let guard = state
+        .lock()
+        .map_err(|_| "audio state lock poisoned".to_string())?;
+
+    if guard.stop.is_some() {
+        return Err("stop monitoring before transcribe".into());
+    }
+
+    let samples = {
+        let segments = guard
+            .session_segments
+            .lock()
+            .map_err(|_| "session segments lock poisoned".to_string())?;
+        segments
+            .get(index)
+            .cloned()
+            .ok_or_else(|| format!("segment index out of range: {index}"))?
+    };
+
+    let text = stt.transcribe(&samples)?;
+    Ok(TranscriptResult {
+        segment_index: index,
+        text,
+    })
 }
 
 #[tauri::command]
@@ -162,11 +208,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(AudioMonitorState::new()))
+        .manage(SttState::new())
         .invoke_handler(tauri::generate_handler![
             mic_permission_status,
             open_microphone_settings,
             list_input_audio_devices,
             list_session_segments,
+            whisper_model_info,
+            transcribe_session_segment,
             replay_session_segment,
             start_audio_monitor,
             stop_audio_monitor,

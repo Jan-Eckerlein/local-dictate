@@ -67,7 +67,7 @@ flowchart TB
 | Topic      | Choice                            | Notes                                                                                |
 | ---------- | --------------------------------- | ------------------------------------------------------------------------------------ |
 | Platform   | macOS                             | Windows documented as untested unless time allows                                    |
-| STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script                                                |
+| STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; **auto-detect** until **#8** language setting   |
 | Model size | `base` (default)                  | `small` as optional upgrade in README                                                |
 | VAD        | RMS + silence hang + max duration | Default RMS **0.008** in code; user threshold at **#8** (see milestones)             |
 | Paste      | Clipboard + simulated ⌘V          | Accessibility permission likely required                                             |
@@ -92,14 +92,24 @@ Each step should compile or be an obvious WIP milestone.
 | 3   | `cpal` input device list + UI selector (avoid wrong default mic)    | done                |
 | 4   | Resample 16 kHz mono + silence segmentation                         | done                |
 | 5   | cpal replay after stop                                              | done                |
-| 6   | `whisper-rs` + model download script                                | todo                |
+| 6   | `whisper-rs` + model download script                                | done                |
 | 7   | End-to-end: silence → transcript in app state                       | todo                |
-| 8   | User setting: VAD RMS threshold (persist; optional hang later)      | todo                |
+| 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en) | todo        |
 | 9   | Global shortcut + paste (TextEdit / Notes test)                     | todo                |
 | 10  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | todo                |
 | 11  | UI state machine + error / permission hints                         | todo                |
 | 12  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo                |
 | 13  | Release build (`pnpm tauri build`) + known limitations              | todo                |
+
+### Milestone #7 notes (E2E STT)
+
+- Wire VAD segments → **`mpsc`** → Whisper worker (never block cpal); emit transcript into app state / UI (replace manual **Transcribe** as primary path).
+- **VAD pre-roll (observed):** segments cut in on the first loud 20 ms frame — replay sounds correct but **starts abruptly**; Whisper often garbles the **first words** (e.g. “eins zwei” → “ein sei”). Not a loudness issue when replay is intelligible.
+  - Add ~**200–300 ms** ring pre-roll at 16 kHz prepended when speech is confirmed (or constant rolling buffer while monitoring).
+  - Optional **speech onset**: require **2–3 consecutive** speech frames before `recording` starts (tune with pre-roll so word attacks are not clipped).
+  - Re-test with same phrase: “test eins zwei drei …” vs. manual transcribe baseline.
+- **Level / SNR (observed):** transcript quality is clearly better when speaking **louder** than quietly (same wording). Quiet speech → lower sample amplitudes, VAD rides closer to threshold, Whisper gets weaker SNR — not only a “cut-in too fast” issue. Consider optional **peak normalize** before STT (cap ~0.9) if quiet dictation must work; document “mic gain / distance” for acceptance demos.
+- **Language:** Until **#8**, keep **auto-detect** (`set_language(None)`, `translate(false)`). Settings add persisted **auto / de / en** → `FullParams::set_language`.
 
 ---
 
