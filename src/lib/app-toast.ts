@@ -2,6 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { toast, type ExternalToast } from "sonner";
 import { feedbackFromRaw, type FeedbackKind } from "@/lib/feedback";
 
+const DURATION: Record<FeedbackKind, number> = {
+  info: 6_000,
+  alert: 10_000,
+  error: Number.POSITIVE_INFINITY,
+};
+
 const KIND_CLASS: Record<FeedbackKind, string> = {
   info:
     "!border-blue-500/45 !bg-blue-500/12 !text-foreground dark:!bg-blue-500/20 [&_[data-title]]:text-foreground",
@@ -20,7 +26,11 @@ export function showAppToast(
     toast: KIND_CLASS[kind],
     ...options?.classNames,
   };
-  const opts: ExternalToast = { ...options, classNames };
+  const opts: ExternalToast = {
+    ...options,
+    duration: options?.duration ?? DURATION[kind],
+    classNames,
+  };
 
   switch (kind) {
     case "info":

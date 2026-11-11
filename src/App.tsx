@@ -133,6 +133,7 @@ function App() {
     refreshLatestTranscript();
     void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
     void invoke<AppSettings>("get_app_settings").then(setAppSettings);
+    void invoke<string>("request_microphone_permission").then(setMicStatus);
   }, [refreshMicStatus, refreshAxStatus, refreshLatestTranscript]);
 
   const updateVadThreshold = useCallback(async (vadRmsThreshold: number) => {
@@ -387,9 +388,10 @@ function App() {
     if (phaseToasted.current.has(uiPhase)) return;
 
     if (uiPhase === "needs_model") {
+      const path = whisperModel?.path ?? "models/ggml-base.bin";
       showAppToast(
-        "Whisper model not found. Run pnpm download-model in the project root, then restart.",
-        "alert",
+        `Whisper model not found. Expected at: ${path}. For a dev build run pnpm download-model; release builds should bundle the model — reinstall the latest DMG or place ggml-base.bin under Application Support.`,
+        "error",
       );
       phaseToasted.current.add(uiPhase);
       return;
@@ -400,7 +402,7 @@ function App() {
         micStatus === "denied"
           ? "Microphone denied — enable this app under System Settings → Privacy & Security → Microphone."
           : "Microphone access is required to start monitoring.";
-      showAppToast(message, "alert", {
+      showAppToast(message, "error", {
         action: {
           label: "Settings",
           onClick: () => void openSettings(),
@@ -408,7 +410,7 @@ function App() {
       });
       phaseToasted.current.add(uiPhase);
     }
-  }, [uiPhase, micStatus, openSettings]);
+  }, [uiPhase, micStatus, openSettings, whisperModel?.path]);
 
   return (
     <div className="relative min-h-screen">

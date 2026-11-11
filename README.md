@@ -116,7 +116,7 @@ Artifacts land under `src-tauri/target/release/bundle/` (`.app` and `.dmg` on Ap
 
 **macOS minimum:** 11.0 (set in `tauri.conf.json` and `src-tauri/.cargo/config.toml` so whisper.cpp can compile with C++17 `std::filesystem`).
 
-On a **fresh clone**, run `pnpm install`, download the model, and ensure Xcode CLI tools / Rust are installed before building. The Whisper **model is not bundled** in the CI artifact; install it separately after download.
+On a **fresh clone**, run `pnpm install`, download the model, and ensure Xcode CLI tools / Rust are installed before building. **CI workflow artifacts** are unsigned smoke builds without the model; **tagged GitHub Releases** download the model during the workflow and bundle `ggml-base.bin` inside the app.
 
 ### CI
 
@@ -142,7 +142,9 @@ git push origin v0.1.0
 
 That runs [`.github/workflows/release.yml`](.github/workflows/release.yml) and attaches the macOS `.dmg` to the GitHub **Release** for that tag. Tags like `v0.1.0-rc.1` are marked **pre-release**.
 
-After installing, still run `pnpm download-model` (or place `models/ggml-base.bin` next to the app as documented above) — the Whisper weights are not bundled.
+Tagged releases **include** `ggml-base.bin` in the app bundle (~150 MB DMG). Dev/CI artifacts do not.
+
+**Unsigned DMG from GitHub:** if macOS says the app is “damaged”, clear quarantine after install: `xattr -cr /Applications/local-dictate.app` (or right‑click → Open once).
 
 ---
 

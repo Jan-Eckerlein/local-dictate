@@ -72,6 +72,12 @@ fn open_microphone_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn request_microphone_permission() -> Result<String, String> {
+    macos_mic::request_access_if_needed()?;
+    Ok(mic_permission_status())
+}
+
+#[tauri::command]
 fn accessibility_permission_status() -> String {
     macos_accessibility::authorization_status().to_string()
 }
@@ -348,7 +354,7 @@ pub fn run() {
     builder
         .setup(|app| {
             let (tx, rx) = mpsc::channel::<SttJob>();
-            let stt = Arc::new(SttState::new());
+            let stt = Arc::new(SttState::new(app.handle()));
             let settings = SettingsState::load(app.handle())?;
             let transcripts = TranscriptBuffer::default();
             spawn_stt_worker(
@@ -371,6 +377,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             mic_permission_status,
+            request_microphone_permission,
             open_microphone_settings,
             accessibility_permission_status,
             open_accessibility_settings,

@@ -63,6 +63,27 @@ pub fn ensure_access() -> Result<(), String> {
     Ok(())
 }
 
+/// Show the system mic prompt when status is `not_determined` (registers the app in Privacy → Microphone).
+#[cfg(target_os = "macos")]
+pub fn request_access_if_needed() -> Result<(), String> {
+    use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
+
+    let media_type = unsafe { AVMediaTypeAudio.as_ref() }
+        .ok_or_else(|| "AVMediaTypeAudio unavailable".to_string())?;
+
+    match unsafe { AVCaptureDevice::authorizationStatusForMediaType(media_type) } {
+        AVAuthorizationStatus::NotDetermined => ensure_access(),
+        AVAuthorizationStatus::Authorized => Ok(()),
+        AVAuthorizationStatus::Denied | AVAuthorizationStatus::Restricted => Ok(()),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_access_if_needed() -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg(target_os = "macos")]
 pub fn open_privacy_settings() -> Result<(), String> {
     std::process::Command::new("open")

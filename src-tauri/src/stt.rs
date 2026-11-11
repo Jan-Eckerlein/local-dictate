@@ -2,16 +2,55 @@ use crate::segment::normalize_peak_for_stt;
 use crate::settings::{SettingsState, WhisperLanguage};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use tauri::{AppHandle, Manager, path::BaseDirectory};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 pub const DEFAULT_MODEL_FILE: &str = "ggml-base.bin";
 
-/// `src-tauri/../models/ggml-base.bin` (repo root). Override with `LOCAL_DICTATE_WHISPER_MODEL`.
-pub fn default_model_path() -> PathBuf {
+/// Override with `LOCAL_DICTATE_WHISPER_MODEL` (absolute path).
+pub fn resolve_model_path(app: &AppHandle) -> PathBuf {
     if let Ok(path) = std::env::var("LOCAL_DICTATE_WHISPER_MODEL") {
         return PathBuf::from(path);
     }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../models").join(DEFAULT_MODEL_FILE)
+
+    let filename = DEFAULT_MODEL_FILE;
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    let resource_names = [
+        format!("models/{filename}"),
+        format!("_up_/models/{filename}"),
+        filename.to_string(),
+    ];
+    for name in resource_names {
+        if let Ok(p) = app.path().resolve(&name, BaseDirectory::Resource) {
+            candidates.push(p);
+        }
+    }
+
+    if let Ok(dir) = app.path().app_data_dir() {
+        candidates.push(dir.join("models").join(filename));
+    }
+
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../models")
+            .join(filename),
+    );
+
+    for p in &candidates {
+        if p.exists() {
+            return p.clone();
+        }
+    }
+
+    app.path()
+        .app_data_dir()
+        .map(|dir| dir.join("models").join(filename))
+        .unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../models")
+                .join(filename)
+        })
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -30,7 +69,7 @@ impl WhisperEngine {
     pub fn load(path: &Path) -> Result<Self, String> {
         if !path.exists() {
             return Err(format!(
-                "model not found at {} — run scripts/download-whisper-model.sh",
+                "model not found at {} — download ggml-base.bin into app Resources, app data models/, or repo models/",
                 path.display()
             ));
         }
@@ -97,9 +136,9 @@ pub struct SttState {
 }
 
 impl SttState {
-    pub fn new() -> Self {
+    pub fn new(app: &AppHandle) -> Self {
         Self {
-            model_path: default_model_path(),
+            model_path: resolve_model_path(app),
             engine: Mutex::new(None),
         }
     }
