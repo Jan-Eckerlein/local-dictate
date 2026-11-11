@@ -45,6 +45,16 @@ interface TranscriptResult {
   text: string;
 }
 
+interface TranscriptReadyPayload {
+  segmentIndex: number;
+  text: string;
+}
+
+interface TranscriptErrorPayload {
+  segmentIndex: number;
+  message: string;
+}
+
 function App() {
   const [monitoring, setMonitoring] = useState(false);
   const [level, setLevel] = useState(0);
@@ -60,6 +70,7 @@ function App() {
   const [transcribingIndex, setTranscribingIndex] = useState<number | null>(null);
   const [transcripts, setTranscripts] = useState<Record<number, string>>({});
   const [whisperModel, setWhisperModel] = useState<WhisperModelInfo | null>(null);
+  const [sttPendingIndex, setSttPendingIndex] = useState<number | null>(null);
 
   const refreshMicStatus = useCallback(() => {
     void invoke<string>("mic_permission_status").then(setMicStatus);
@@ -94,6 +105,8 @@ function App() {
     let cancelled = false;
     let unlistenLevel: UnlistenFn | undefined;
     let unlistenSegment: UnlistenFn | undefined;
+    let unlistenTranscript: UnlistenFn | undefined;
+    let unlistenTranscriptErr: UnlistenFn | undefined;
 
     void (async () => {
       unlistenLevel = await listen<AudioLevelPayload>("audio-level", (event) => {
@@ -107,9 +120,32 @@ function App() {
       unlistenSegment = await listen<AudioSegmentPayload>("audio-segment", (event) => {
         setLastSegment(event.payload);
         setSegmentCount(event.payload.index + 1);
+        setSttPendingIndex(event.payload.index);
       });
       if (cancelled) {
         await unlistenSegment();
+        return;
+      }
+
+      unlistenTranscript = await listen<TranscriptReadyPayload>("transcript-ready", (event) => {
+        const { segmentIndex, text } = event.payload;
+        setTranscripts((prev) => ({ ...prev, [segmentIndex]: text }));
+        setSttPendingIndex((pending) => (pending === segmentIndex ? null : pending));
+        void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
+      });
+      if (cancelled) {
+        await unlistenTranscript();
+        return;
+      }
+
+      unlistenTranscriptErr = await listen<TranscriptErrorPayload>("transcript-error", (event) => {
+        setError(`STT #${event.payload.segmentIndex + 1}: ${event.payload.message}`);
+        setSttPendingIndex((pending) =>
+          pending === event.payload.segmentIndex ? null : pending,
+        );
+      });
+      if (cancelled) {
+        await unlistenTranscriptErr();
       }
     })();
 
@@ -117,6 +153,8 @@ function App() {
       cancelled = true;
       void unlistenLevel?.();
       void unlistenSegment?.();
+      void unlistenTranscript?.();
+      void unlistenTranscriptErr?.();
     };
   }, []);
 
@@ -137,6 +175,7 @@ function App() {
       setSegmentCount(0);
       setSessionSegments([]);
       setTranscripts({});
+      setSttPendingIndex(null);
       setMonitoring(true);
       refreshMicStatus();
     } catch (e) {
@@ -190,7 +229,7 @@ function App() {
   return (
     <main className="container">
       <h1>local-dictate</h1>
-      <p className="subtitle">Microphone level + VAD segments (16 kHz)</p>
+      <p className="subtitle">VAD → local Whisper (auto while monitoring)</p>
 
       {!micAuthorized && (
         <div className="permission-block">
@@ -248,16 +287,33 @@ function App() {
       )}
 
       {monitoring && (
-        <p className="segment-info">
-          Segments: {segmentCount}
-          {lastSegment && (
-            <>
-              <br />
-              Last: {lastSegment.durationSecs.toFixed(2)} s · {lastSegment.sampleCount} samples @{" "}
-              {lastSegment.sampleRate} Hz
-            </>
+        <section className="live-stt" aria-live="polite">
+          <p className="segment-info">
+            Segments: {segmentCount}
+            {sttPendingIndex !== null && transcripts[sttPendingIndex] === undefined && (
+              <> · transcribing #{sttPendingIndex + 1}…</>
+            )}
+            {lastSegment && (
+              <>
+                <br />
+                Last: {lastSegment.durationSecs.toFixed(2)} s · {lastSegment.sampleCount} samples @{" "}
+                {lastSegment.sampleRate} Hz
+              </>
+            )}
+          </p>
+          {Object.keys(transcripts).length > 0 && (
+            <ul className="live-transcript-list">
+              {Object.entries(transcripts)
+                .map(([idx, text]) => ({ index: Number(idx), text }))
+                .sort((a, b) => a.index - b.index)
+                .map((row) => (
+                  <li key={row.index}>
+                    <span className="live-transcript-label">#{row.index + 1}</span> {row.text}
+                  </li>
+                ))}
+            </ul>
           )}
-        </p>
+        </section>
       )}
 
       {whisperModel && !whisperModel.exists && (

@@ -1,6 +1,8 @@
 use crate::segment::{
     interleaved_to_mono, resample_linear, AudioSegmentPayload, VadProcessor, WHISPER_SAMPLE_RATE,
 };
+use crate::stt_worker::SttJob;
+use std::sync::mpsc::Sender;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, StreamConfig};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -157,6 +159,7 @@ pub fn start_monitor(
     stop: Arc<AtomicBool>,
     device_name: Option<String>,
     session_segments: Arc<StdMutex<Vec<Vec<f32>>>>,
+    stt_tx: Sender<SttJob>,
 ) -> Result<AudioMonitorInfo, String> {
     let host = cpal::default_host();
     let device = resolve_input_device(&host, device_name.as_deref())?;
@@ -197,6 +200,7 @@ pub fn start_monitor(
     let stop_vad = stop.clone();
     let app_vad = app.clone();
     let segments_store = session_segments;
+    let stt_tx = stt_tx;
     thread::spawn(move || {
         let mut vad = VadProcessor::new();
         while !stop_vad.load(Ordering::Relaxed) {
@@ -211,8 +215,9 @@ pub fn start_monitor(
                         } else {
                             continue;
                         };
+                        let index = payload.index;
                         let _ = app_vad.emit("audio-segment", payload);
-                        // Milestone 6+: hand `seg` to whisper worker via mpsc.
+                        let _ = stt_tx.send(SttJob { index, samples: seg });
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {}

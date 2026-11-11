@@ -93,7 +93,7 @@ Each step should compile or be an obvious WIP milestone.
 | 4   | Resample 16 kHz mono + silence segmentation                         | done                |
 | 5   | cpal replay after stop                                              | done                |
 | 6   | `whisper-rs` + model download script                                | done                |
-| 7   | Auto STT pipeline: VAD segment → `mpsc` whisper worker → live transcript (no manual Transcribe) | todo |
+| 7   | Auto STT pipeline: VAD segment → `mpsc` whisper worker → live transcript (no manual Transcribe) | done |
 | 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en) | todo        |
 | 9   | Global shortcut + paste (TextEdit / Notes test)                     | todo                |
 | 10  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | todo                |

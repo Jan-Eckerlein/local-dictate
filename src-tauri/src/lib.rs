@@ -3,13 +3,16 @@ mod macos_mic;
 mod replay;
 mod segment;
 mod stt;
+mod stt_worker;
 
 use audio::{list_input_devices, start_monitor, stop_monitor, AudioMonitorInfo, InputDeviceInfo};
 use segment::AudioSegmentPayload;
 use stt::{SttState, WhisperModelInfo};
+use stt_worker::{spawn_stt_worker, SttJob};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use tauri::State;
+use tauri::{Manager, State};
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +44,10 @@ impl AudioMonitorState {
             replaying: Arc::new(AtomicBool::new(false)),
         }
     }
+}
+
+struct SttInbox {
+    tx: mpsc::Sender<SttJob>,
 }
 
 #[tauri::command]
@@ -84,22 +91,23 @@ fn list_session_segments(
 }
 
 #[tauri::command]
-fn whisper_model_info(stt: State<'_, SttState>) -> WhisperModelInfo {
+fn whisper_model_info(stt: State<'_, Arc<SttState>>) -> WhisperModelInfo {
     stt.model_info()
 }
 
+/// Manual STT (debug); auto pipeline uses `transcript-ready` events while monitoring.
 #[tauri::command]
 fn transcribe_session_segment(
     index: usize,
     state: State<'_, Mutex<AudioMonitorState>>,
-    stt: State<'_, SttState>,
+    stt: State<'_, Arc<SttState>>,
 ) -> Result<TranscriptResult, String> {
     let guard = state
         .lock()
         .map_err(|_| "audio state lock poisoned".to_string())?;
 
     if guard.stop.is_some() {
-        return Err("stop monitoring before transcribe".into());
+        return Err("stop monitoring before manual transcribe".into());
     }
 
     let samples = {
@@ -159,6 +167,7 @@ fn replay_session_segment(
 fn start_audio_monitor(
     app: tauri::AppHandle,
     state: State<'_, Mutex<AudioMonitorState>>,
+    inbox: State<'_, SttInbox>,
     device_name: Option<String>,
 ) -> Result<AudioMonitorInfo, String> {
     let mut guard = state
@@ -186,6 +195,7 @@ fn start_audio_monitor(
         stop.clone(),
         device_name,
         guard.session_segments.clone(),
+        inbox.tx.clone(),
     )?;
     guard.stop = Some(stop);
     Ok(info)
@@ -207,8 +217,15 @@ fn stop_audio_monitor(state: State<'_, Mutex<AudioMonitorState>>) -> Result<(), 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(Mutex::new(AudioMonitorState::new()))
-        .manage(SttState::new())
+        .setup(|app| {
+            let (tx, rx) = mpsc::channel::<SttJob>();
+            let stt = Arc::new(SttState::new());
+            spawn_stt_worker(app.handle().clone(), stt.clone(), rx);
+            app.manage(stt);
+            app.manage(SttInbox { tx });
+            app.manage(Mutex::new(AudioMonitorState::new()));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             mic_permission_status,
             open_microphone_settings,
