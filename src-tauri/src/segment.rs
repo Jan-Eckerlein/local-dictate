@@ -16,15 +16,17 @@ pub const VAD_FRAME_MS: u32 = 20;
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioSegmentPayload {
+    pub index: usize,
     pub sample_rate: u32,
     pub sample_count: usize,
     pub duration_secs: f32,
 }
 
 impl AudioSegmentPayload {
-    pub fn from_segment(samples: &[f32]) -> Self {
+    pub fn from_segment(samples: &[f32], index: usize) -> Self {
         let count = samples.len();
         Self {
+            index,
             sample_rate: WHISPER_SAMPLE_RATE,
             sample_count: count,
             duration_secs: count as f32 / WHISPER_SAMPLE_RATE as f32,

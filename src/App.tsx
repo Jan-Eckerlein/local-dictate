@@ -21,6 +21,7 @@ interface InputDeviceInfo {
 }
 
 interface AudioSegmentPayload {
+  index: number;
   sampleRate: number;
   sampleCount: number;
   durationSecs: number;
@@ -75,23 +76,30 @@ function App() {
   }, [micStatus, loadDevices]);
 
   useEffect(() => {
+    let cancelled = false;
     let unlistenLevel: UnlistenFn | undefined;
     let unlistenSegment: UnlistenFn | undefined;
 
-    listen<AudioLevelPayload>("audio-level", (event) => {
-      setLevel(event.payload.level);
-    }).then((fn) => {
-      unlistenLevel = fn;
-    });
+    void (async () => {
+      unlistenLevel = await listen<AudioLevelPayload>("audio-level", (event) => {
+        setLevel(event.payload.level);
+      });
+      if (cancelled) {
+        await unlistenLevel();
+        return;
+      }
 
-    listen<AudioSegmentPayload>("audio-segment", (event) => {
-      setLastSegment(event.payload);
-      setSegmentCount((n) => n + 1);
-    }).then((fn) => {
-      unlistenSegment = fn;
-    });
+      unlistenSegment = await listen<AudioSegmentPayload>("audio-segment", (event) => {
+        setLastSegment(event.payload);
+        setSegmentCount(event.payload.index + 1);
+      });
+      if (cancelled) {
+        await unlistenSegment();
+      }
+    })();
 
     return () => {
+      cancelled = true;
       void unlistenLevel?.();
       void unlistenSegment?.();
     };

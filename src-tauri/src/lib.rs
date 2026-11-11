@@ -63,9 +63,9 @@ fn list_session_segments(
         .iter()
         .enumerate()
         .map(|(index, seg)| {
-            let summary = AudioSegmentPayload::from_segment(seg);
+            let summary = AudioSegmentPayload::from_segment(seg, index);
             SessionSegmentSummary {
-                index,
+                index: summary.index,
                 sample_rate: summary.sample_rate,
                 sample_count: summary.sample_count,
                 duration_secs: summary.duration_secs,

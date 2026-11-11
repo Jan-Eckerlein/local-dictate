@@ -204,10 +204,13 @@ pub fn start_monitor(
                 Ok(chunk) => {
                     let resampled = resample_linear(&chunk, sample_rate, WHISPER_SAMPLE_RATE);
                     for seg in vad.push_resampled(&resampled) {
-                        if let Ok(mut guard) = segments_store.lock() {
+                        let payload = if let Ok(mut guard) = segments_store.lock() {
                             guard.push(seg.clone());
-                        }
-                        let payload = AudioSegmentPayload::from_segment(&seg);
+                            let index = guard.len() - 1;
+                            AudioSegmentPayload::from_segment(&seg, index)
+                        } else {
+                            continue;
+                        };
                         let _ = app_vad.emit("audio-segment", payload);
                         // Milestone 6+: hand `seg` to whisper worker via mpsc.
                     }
