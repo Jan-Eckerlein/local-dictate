@@ -88,7 +88,7 @@ Each step should compile or be an obvious WIP milestone.
 |---|-----------|--------|
 | 0 | Repo scaffold, `.gitignore`, license (MIT) | done (pre-template) |
 | 1 | Tauri 2 + React + dev/build working | done |
-| 2 | `cpal` capture + RMS → UI level meter | todo |
+| 2 | `cpal` capture + RMS → UI level meter | done |
 | 3 | Resample 16 kHz mono + silence segmentation | todo |
 | 4 | `whisper-rs` + model download script | todo |
 | 5 | End-to-end: silence → transcript in app state | todo |

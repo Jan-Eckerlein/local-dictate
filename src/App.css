@@ -22,12 +22,72 @@
 }
 
 .container {
-  margin: 0;
-  padding-top: 10vh;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  max-width: 28rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
   text-align: center;
+  gap: 0.75rem;
+}
+
+.subtitle {
+  margin: 0;
+  opacity: 0.75;
+  font-size: 0.95rem;
+}
+
+.meter {
+  width: 100%;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: #d4d4d4;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+  transition: width 80ms linear;
+}
+
+.meter-label {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.device-info {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.permission-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 0.9rem;
+}
+
+.hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  line-height: 1.35;
+}
+
+.actions {
+  margin-top: 0.5rem;
 }
 
 .logo {
@@ -91,10 +151,6 @@ button {
   outline: none;
 }
 
-#greet-input {
-  margin-right: 5px;
-}
-
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;
@@ -112,5 +168,9 @@ button {
   }
   button:active {
     background-color: #0f0f0f69;
+  }
+
+  .meter {
+    background: #404040;
   }
 }

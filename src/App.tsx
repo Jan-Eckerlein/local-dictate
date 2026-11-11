@@ -1,49 +1,120 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+interface AudioMonitorInfo {
+  sampleRate: number;
+  channels: number;
+  sampleFormat: string;
+  deviceName: string;
+}
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+interface AudioLevelPayload {
+  level: number;
+  rms: number;
+}
+
+function App() {
+  const [monitoring, setMonitoring] = useState(false);
+  const [level, setLevel] = useState(0);
+  const [info, setInfo] = useState<AudioMonitorInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [micStatus, setMicStatus] = useState("");
+
+  const refreshMicStatus = useCallback(() => {
+    void invoke<string>("mic_permission_status").then(setMicStatus);
+  }, []);
+
+  useEffect(() => {
+    refreshMicStatus();
+  }, [refreshMicStatus]);
+
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+
+    listen<AudioLevelPayload>("audio-level", (event) => {
+      setLevel(event.payload.level);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      void unlisten?.();
+    };
+  }, []);
+
+  const micAuthorized = micStatus === "authorized";
+
+  const openSettings = useCallback(() => {
+    void invoke("open_microphone_settings").then(refreshMicStatus);
+  }, [refreshMicStatus]);
+
+  const start = useCallback(async () => {
+    setError(null);
+    try {
+      const deviceInfo = await invoke<AudioMonitorInfo>("start_audio_monitor");
+      setInfo(deviceInfo);
+      setMonitoring(true);
+      refreshMicStatus();
+    } catch (e) {
+      setMonitoring(false);
+      setError(String(e));
+      refreshMicStatus();
+    }
+  }, [refreshMicStatus]);
+
+  const stop = useCallback(async () => {
+    await invoke("stop_audio_monitor");
+    setMonitoring(false);
+    setLevel(0);
+  }, []);
+
+  const pct = Math.round(Math.min(1, level) * 100);
 
   return (
     <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+      <h1>local-dictate</h1>
+      <p className="subtitle">Microphone level (cpal)</p>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+      {!micAuthorized && (
+        <div className="permission-block">
+          <p className="hint">
+            Microphone: <strong>{micStatus || "…"}</strong>
+            {micStatus === "denied" && " — enable Cursor/Terminal or this app in System Settings."}
+          </p>
+          <button type="button" onClick={openSettings}>
+            Open microphone settings
+          </button>
+        </div>
+      )}
+
+      <div className="meter" aria-label="Microphone level">
+        <div className="meter-fill" style={{ width: `${pct}%` }} />
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+      <p className="meter-label">{pct}%</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+      <div className="row actions">
+        {!monitoring ? (
+          <button type="button" onClick={() => void start()}>
+            Start monitoring
+          </button>
+        ) : (
+          <button type="button" onClick={() => void stop()}>
+            Stop
+          </button>
+        )}
+      </div>
+
+      {info && (
+        <p className="device-info">
+          {info.deviceName}
+          <br />
+          {info.sampleRate} Hz · {info.channels} ch · {info.sampleFormat}
+        </p>
+      )}
+
+      {error && <p className="error">{error}</p>}
     </main>
   );
 }
