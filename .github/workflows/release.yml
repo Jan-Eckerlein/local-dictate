@@ -1,0 +1,51 @@
+name: Release
+
+# Published GitHub Releases only on version tags — not on main pushes or PRs.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: macOS DMG
+    runs-on: macos-latest
+    env:
+      CI: true
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build
+      - name: Collect bundle paths
+        id: bundle
+        run: |
+          dmg="$(ls -1 src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null | head -1)"
+          if [ -z "$dmg" ]; then
+            echo "No DMG found"
+            exit 1
+          fi
+          echo "dmg=$dmg" >> "$GITHUB_OUTPUT"
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.bundle.outputs.dmg }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

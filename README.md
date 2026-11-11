@@ -129,6 +129,21 @@ GitHub Actions on every push/PR to `main`:
 
 Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
+### GitHub Releases (tagged builds only)
+
+CI on `main` / PRs **does not** create a Release. A downloadable DMG is published only when you push a **version tag**:
+
+```bash
+git checkout main
+git pull
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+That runs [`.github/workflows/release.yml`](.github/workflows/release.yml) and attaches the macOS `.dmg` to the GitHub **Release** for that tag. Tags like `v0.1.0-rc.1` are marked **pre-release**.
+
+After installing, still run `pnpm download-model` (or place `models/ggml-base.bin` next to the app as documented above) — the Whisper weights are not bundled.
+
 ---
 
 ## Architecture

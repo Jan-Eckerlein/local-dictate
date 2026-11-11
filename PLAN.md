@@ -115,6 +115,7 @@ Each step should compile or be an obvious WIP milestone.
 - `src-tauri/.cargo/config.toml`: `MACOSX_DEPLOYMENT_TARGET=11.0` (whisper.cpp compile).
 - `tauri.conf.json` `minimumSystemVersion`: `11.0`.
 - `.github/workflows/ci.yml`: Ubuntu frontend build + macOS `pnpm tauri build`, bundle artifacts.
+- `.github/workflows/release.yml`: **tag `v*` only** → GitHub Release + DMG (not on `main` push / PR).
 - CI bundles are **unsigned**; Whisper model still via `pnpm download-model` locally.
 
 ### Milestone #14 notes (README)
