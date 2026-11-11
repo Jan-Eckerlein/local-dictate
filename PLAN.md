@@ -64,13 +64,13 @@ flowchart TB
 
 ## Decisions
 
-| Topic      | Choice                            | Notes                                                                                |
-| ---------- | --------------------------------- | ------------------------------------------------------------------------------------ |
-| Platform   | macOS                             | Windows documented as untested unless time allows                                    |
-| STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json      |
-| Model size | `base` (default)                  | `pnpm download-model` / env; **UI selector at #16** (tiny/base/small, files on disk) |
-| VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                 |
-| Paste      | Clipboard + simulated ⌘V          | **⌘⇧V** / **⌘⇧B** / **⌘⇧A**; Accessibility required (macOS)                          |
+| Topic      | Choice                            | Notes                                                                                 |
+| ---------- | --------------------------------- | ------------------------------------------------------------------------------------- |
+| Platform   | macOS                             | Windows documented as untested unless time allows                                     |
+| STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json       |
+| Model size | `base` (default)                  | `pnpm download-model` / env; **UI selector at #16** (tiny/base/small, files on disk)  |
+| VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                     |
+| Paste      | Clipboard + simulated ⌘V          | **⌘⇧V** / **⌘⇧B** / **⌘⇧A**; Accessibility required (macOS)                           |
 | UI         | Small window + meter              | Minimal HTML/CSS for milestones 4–11; **shadcn** + Tailwind at **#12**; tray deferred |
 
 **Open (pick during build):**
@@ -84,25 +84,25 @@ flowchart TB
 
 Each step should compile or be an obvious WIP milestone.
 
-| #   | Milestone                                                           | Status              |
-| --- | ------------------------------------------------------------------- | ------------------- |
-| 0   | Repo scaffold, `.gitignore`, license (MIT)                          | done (pre-template) |
-| 1   | Tauri 2 + React + dev/build working                                 | done                |
-| 2   | `cpal` capture + RMS → UI level meter                               | done                |
-| 3   | `cpal` input device list + UI selector (avoid wrong default mic)    | done                |
-| 4   | Resample 16 kHz mono + silence segmentation                         | done                |
-| 5   | cpal replay after stop                                              | done                |
-| 6   | `whisper-rs` + model download script                                | done                |
-| 7   | Auto STT pipeline: VAD segment → `mpsc` whisper worker → live transcript (no manual Transcribe) | done |
-| 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en) | done        |
-| 9   | Global shortcut + paste (TextEdit / Notes test)                     | done                |
-| 10  | VAD **pre-roll** (~300 ms) + **speech onset** (3×20 ms frames) before record | done        |
-| 11  | **Peak normalize** quiet segments before Whisper (`normalize_peak_for_stt`)   | done        |
-| 12  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | done                |
-| 13  | UI state machine + error / permission hints                         | todo                |
-| 14  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo                |
-| 15  | Release build (`pnpm tauri build`) + known limitations              | todo                |
-| 16  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | todo |
+| #   | Milestone                                                                                                                          | Status              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| 0   | Repo scaffold, `.gitignore`, license (MIT)                                                                                         | done (pre-template) |
+| 1   | Tauri 2 + React + dev/build working                                                                                                | done                |
+| 2   | `cpal` capture + RMS → UI level meter                                                                                              | done                |
+| 3   | `cpal` input device list + UI selector (avoid wrong default mic)                                                                   | done                |
+| 4   | Resample 16 kHz mono + silence segmentation                                                                                        | done                |
+| 5   | cpal replay after stop                                                                                                             | done                |
+| 6   | `whisper-rs` + model download script                                                                                               | done                |
+| 7   | Auto STT pipeline: VAD segment → `mpsc` whisper worker → live transcript (no manual Transcribe)                                    | done                |
+| 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en)                                                      | done                |
+| 9   | Global shortcut + paste (TextEdit / Notes test)                                                                                    | done                |
+| 10  | VAD **pre-roll** (~300 ms) + **speech onset** (3×20 ms frames) before record                                                       | done                |
+| 11  | **Peak normalize** quiet segments before Whisper (`normalize_peak_for_stt`)                                                        | done                |
+| 12  | Tailwind + shadcn foundation (Button, Select, Alert, …)                                                                            | done                |
+| 13  | UI state machine + error / permission hints                                                                                        | todo                |
+| 14  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md`                                                                | todo                |
+| 15  | Release build (`pnpm tauri build`) + known limitations                                                                             | todo                |
+| 16  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | todo                |
 
 ### Milestone #10 notes (VAD pre-roll)
 
@@ -125,6 +125,7 @@ Each step should compile or be an obvious WIP milestone.
 ### Milestone #7 notes (auto STT pipeline)
 
 Not “prettier UI” alone — **#6** proved Whisper works; **#7** wires production flow: segment closes → queue → background transcribe → UI updates while monitoring (manual **Transcribe** stays optional/debug).
+
 - VAD finished segment → **`mpsc`** → dedicated Whisper worker thread (never block cpal); `transcript-ready` (or similar) + app state.
 - **VAD pre-roll:** see **#10** (implemented).
 - **Level / SNR:** peak normalize before Whisper — see **#11**. Still document mic gain / distance for quiet dictation demos.

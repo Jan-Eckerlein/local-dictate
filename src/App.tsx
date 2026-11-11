@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher";
 import { useTheme } from "@/hooks/use-theme";
-import { type ThemeMode } from "@/lib/theme";
 
 interface AudioMonitorInfo {
   sampleRate: number;
@@ -380,13 +380,17 @@ function App() {
   const pct = Math.round(Math.min(1, level) * 100);
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-col gap-4 p-4 pb-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">local-dictate</h1>
-        <p className="text-muted-foreground text-sm">
-          VAD → local Whisper · ⌘⇧V last · ⌘⇧B batch · ⌘⇧A all
-        </p>
-      </header>
+    <div className="relative min-h-screen">
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeSwitcher value={theme} onChange={setTheme} />
+      </div>
+      <main className="mx-auto flex w-full max-w-lg flex-col gap-4 p-4 pb-8">
+        <header className="space-y-1 pr-28">
+          <h1 className="text-2xl font-semibold tracking-tight">local-dictate</h1>
+          <p className="text-muted-foreground text-sm">
+            VAD → local Whisper · ⌘⇧V last · ⌘⇧B batch · ⌘⇧A all
+          </p>
+        </header>
 
       {error && (
         <Alert variant="destructive">
@@ -438,32 +442,6 @@ function App() {
           </AlertDescription>
         </Alert>
       )}
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Appearance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label htmlFor="theme-mode">Theme</Label>
-            <Select
-              value={theme}
-              onValueChange={(v) => {
-                if (v) setTheme(v as ThemeMode);
-              }}
-            >
-              <SelectTrigger id="theme-mode" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="system">System</SelectItem>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader className="pb-2">
@@ -702,7 +680,8 @@ function App() {
           </CardContent>
         </Card>
       )}
-    </main>
+      </main>
+    </div>
   );
 }
 
