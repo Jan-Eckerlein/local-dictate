@@ -15,6 +15,13 @@ pub struct AudioLevelPayload {
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct InputDeviceInfo {
+    pub name: String,
+    pub is_default: bool,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AudioMonitorInfo {
     pub sample_rate: u32,
     pub channels: u16,
@@ -97,11 +104,57 @@ fn wait_while_running(stop: &AtomicBool) {
     }
 }
 
-pub fn start_monitor(app: AppHandle, stop: Arc<AtomicBool>) -> Result<AudioMonitorInfo, String> {
+pub fn list_input_devices() -> Result<Vec<InputDeviceInfo>, String> {
     let host = cpal::default_host();
-    let device = host
+    let default_name = host
         .default_input_device()
-        .ok_or_else(|| "no default input device".to_string())?;
+        .and_then(|d| d.name().ok());
+
+    let devices = host
+        .input_devices()
+        .map_err(|e| format!("list input devices: {e}"))?;
+
+    let mut out = Vec::new();
+    for device in devices {
+        let name = device.name().map_err(|e| format!("device name: {e}"))?;
+        let is_default = default_name.as_deref() == Some(name.as_str());
+        out.push(InputDeviceInfo { name, is_default });
+    }
+    Ok(out)
+}
+
+fn resolve_input_device(
+    host: &cpal::Host,
+    device_name: Option<&str>,
+) -> Result<cpal::Device, String> {
+    match device_name {
+        None => host
+            .default_input_device()
+            .ok_or_else(|| "no default input device".to_string()),
+        Some(name) if name.is_empty() => host
+            .default_input_device()
+            .ok_or_else(|| "no default input device".to_string()),
+        Some(name) => {
+            for device in host
+                .input_devices()
+                .map_err(|e| format!("list input devices: {e}"))?
+            {
+                if device.name().map_err(|e| format!("device name: {e}"))? == name {
+                    return Ok(device);
+                }
+            }
+            Err(format!("input device not found: {name}"))
+        }
+    }
+}
+
+pub fn start_monitor(
+    app: AppHandle,
+    stop: Arc<AtomicBool>,
+    device_name: Option<String>,
+) -> Result<AudioMonitorInfo, String> {
+    let host = cpal::default_host();
+    let device = resolve_input_device(&host, device_name.as_deref())?;
 
     let device_name = device.name().unwrap_or_else(|_| "unknown".into());
 

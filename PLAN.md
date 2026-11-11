@@ -89,13 +89,14 @@ Each step should compile or be an obvious WIP milestone.
 | 0 | Repo scaffold, `.gitignore`, license (MIT) | done (pre-template) |
 | 1 | Tauri 2 + React + dev/build working | done |
 | 2 | `cpal` capture + RMS → UI level meter | done |
-| 3 | Resample 16 kHz mono + silence segmentation | todo |
-| 4 | `whisper-rs` + model download script | todo |
-| 5 | End-to-end: silence → transcript in app state | todo |
-| 6 | Global shortcut + paste (TextEdit / Notes test) | todo |
-| 7 | UI state machine + error / permission hints | todo |
-| 8 | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo |
-| 9 | Release build (`pnpm tauri build`) + known limitations | todo |
+| 3 | `cpal` input device list + UI selector (avoid wrong default mic) | done |
+| 4 | Resample 16 kHz mono + silence segmentation | todo |
+| 5 | `whisper-rs` + model download script | todo |
+| 6 | End-to-end: silence → transcript in app state | todo |
+| 7 | Global shortcut + paste (TextEdit / Notes test) | todo |
+| 8 | UI state machine + error / permission hints | todo |
+| 9 | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo |
+| 10 | Release build (`pnpm tauri build`) + known limitations | todo |
 
 ---
 

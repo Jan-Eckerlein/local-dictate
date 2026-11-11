@@ -15,12 +15,19 @@ interface AudioLevelPayload {
   rms: number;
 }
 
+interface InputDeviceInfo {
+  name: string;
+  isDefault: boolean;
+}
+
 function App() {
   const [monitoring, setMonitoring] = useState(false);
   const [level, setLevel] = useState(0);
   const [info, setInfo] = useState<AudioMonitorInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [micStatus, setMicStatus] = useState("");
+  const [devices, setDevices] = useState<InputDeviceInfo[]>([]);
+  const [selectedDevice, setSelectedDevice] = useState("");
 
   const refreshMicStatus = useCallback(() => {
     void invoke<string>("mic_permission_status").then(setMicStatus);
@@ -29,6 +36,26 @@ function App() {
   useEffect(() => {
     refreshMicStatus();
   }, [refreshMicStatus]);
+
+  const loadDevices = useCallback(async () => {
+    try {
+      const list = await invoke<InputDeviceInfo[]>("list_input_audio_devices");
+      setDevices(list);
+      setSelectedDevice((prev) => {
+        if (prev && list.some((d) => d.name === prev)) return prev;
+        const fallback = list.find((d) => d.isDefault) ?? list[0];
+        return fallback?.name ?? "";
+      });
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (micStatus === "authorized") {
+      void loadDevices();
+    }
+  }, [micStatus, loadDevices]);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
@@ -53,7 +80,9 @@ function App() {
   const start = useCallback(async () => {
     setError(null);
     try {
-      const deviceInfo = await invoke<AudioMonitorInfo>("start_audio_monitor");
+      const deviceInfo = await invoke<AudioMonitorInfo>("start_audio_monitor", {
+        deviceName: selectedDevice || null,
+      });
       setInfo(deviceInfo);
       setMonitoring(true);
       refreshMicStatus();
@@ -62,7 +91,7 @@ function App() {
       setError(String(e));
       refreshMicStatus();
     }
-  }, [refreshMicStatus]);
+  }, [refreshMicStatus, selectedDevice]);
 
   const stop = useCallback(async () => {
     await invoke("stop_audio_monitor");
@@ -87,6 +116,24 @@ function App() {
             Open microphone settings
           </button>
         </div>
+      )}
+
+      {devices.length > 0 && (
+        <label className="device-select">
+          <span className="device-select-label">Input</span>
+          <select
+            value={selectedDevice}
+            disabled={monitoring}
+            onChange={(e) => setSelectedDevice(e.target.value)}
+          >
+            {devices.map((d) => (
+              <option key={d.name} value={d.name}>
+                {d.name}
+                {d.isDefault ? " (system default)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
 
       <div className="meter" aria-label="Microphone level">

@@ -1,7 +1,7 @@
 mod audio;
 mod macos_mic;
 
-use audio::{start_monitor, stop_monitor, AudioMonitorInfo};
+use audio::{list_input_devices, start_monitor, stop_monitor, AudioMonitorInfo, InputDeviceInfo};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use tauri::State;
@@ -21,9 +21,15 @@ fn open_microphone_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn list_input_audio_devices() -> Result<Vec<InputDeviceInfo>, String> {
+    list_input_devices()
+}
+
+#[tauri::command]
 fn start_audio_monitor(
     app: tauri::AppHandle,
     state: State<'_, Mutex<AudioMonitorState>>,
+    device_name: Option<String>,
 ) -> Result<AudioMonitorInfo, String> {
     let mut guard = state
         .lock()
@@ -36,7 +42,7 @@ fn start_audio_monitor(
     macos_mic::ensure_access()?;
 
     let stop = Arc::new(AtomicBool::new(false));
-    let info = start_monitor(app, stop.clone())?;
+    let info = start_monitor(app, stop.clone(), device_name)?;
     guard.stop = Some(stop);
     Ok(info)
 }
@@ -61,6 +67,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             mic_permission_status,
             open_microphone_settings,
+            list_input_audio_devices,
             start_audio_monitor,
             stop_audio_monitor,
         ])
