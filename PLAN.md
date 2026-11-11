@@ -68,7 +68,7 @@ flowchart TB
 | ---------- | --------------------------------- | ------------------------------------------------------------------------------------ |
 | Platform   | macOS                             | Windows documented as untested unless time allows                                    |
 | STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json      |
-| Model size | `base` (default)                  | `small` as optional upgrade in README                                                |
+| Model size | `base` (default)                  | `pnpm download-model` / env; **UI selector at #14** (tiny/base/small, files on disk) |
 | VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                 |
 | Paste      | Clipboard + simulated ⌘V          | Accessibility permission likely required                                             |
 | UI         | Small window + meter              | Minimal HTML/CSS for milestones 4–9; **shadcn** + Tailwind at **#10**; tray deferred |
@@ -100,6 +100,14 @@ Each step should compile or be an obvious WIP milestone.
 | 11  | UI state machine + error / permission hints                         | todo                |
 | 12  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo                |
 | 13  | Release build (`pnpm tauri build`) + known limitations              | todo                |
+| 14  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | todo |
+
+### Milestone #14 notes (Whisper model)
+
+- Extend `settings.json` with `whisperModel` (filename or enum → `ggml-*.bin`).
+- UI: select next to language; show path + “missing — run download” if file absent.
+- On change: reload `WhisperEngine` in worker (or lazy on next segment); do **not** block cpal.
+- Keep **default `base`** for fresh clones; README documents `WHISPER_MODEL=… pnpm download-model` for extras.
 
 ### Milestone #7 notes (auto STT pipeline)
 
