@@ -93,6 +93,12 @@ interface TranscriptErrorPayload {
 
 type WhisperLanguage = "auto" | "de" | "en";
 
+const WHISPER_LANGUAGE_ITEMS: { value: WhisperLanguage; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "de", label: "German" },
+  { value: "en", label: "English" },
+];
+
 interface AppSettings {
   vadRmsThreshold: number;
   whisperLanguage: WhisperLanguage;
@@ -435,6 +441,24 @@ function App() {
     [uiPhase, axAuthorized, latestTranscript, pasteBusy],
   );
 
+  const whisperModelItems = useMemo(() => {
+    const opts =
+      whisperModelOptions.length > 0
+        ? whisperModelOptions
+        : [
+            {
+              filename: "ggml-base.bin",
+              label: "Base (~141 MB)",
+              exists: true,
+              path: "",
+            },
+          ];
+    return opts.map((opt) => ({
+      value: opt.filename,
+      label: `${opt.label}${!opt.exists ? " — not on disk" : ""}`,
+    }));
+  }, [whisperModelOptions]);
+
   useEffect(() => {
     if (whisperModel === null) return;
     if (whisperModel.exists) {
@@ -608,6 +632,7 @@ function App() {
             <div className="space-y-2">
               <Label htmlFor="whisper-model">Whisper model</Label>
               <Select
+                items={whisperModelItems}
                 value={appSettings.whisperModel}
                 disabled={whisperModel?.envOverride}
                 onValueChange={(v) => {
@@ -618,20 +643,9 @@ function App() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(whisperModelOptions.length > 0
-                    ? whisperModelOptions
-                    : [
-                        {
-                          filename: "ggml-base.bin",
-                          label: "Base (~141 MB)",
-                          exists: true,
-                          path: "",
-                        },
-                      ]
-                  ).map((opt) => (
-                    <SelectItem key={opt.filename} value={opt.filename}>
-                      {opt.label}
-                      {!opt.exists ? " — not on disk" : ""}
+                  {whisperModelItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -651,6 +665,7 @@ function App() {
             <div className="space-y-2">
               <Label htmlFor="whisper-lang">Whisper language</Label>
               <Select
+                items={WHISPER_LANGUAGE_ITEMS}
                 value={appSettings.whisperLanguage}
                 onValueChange={(v) =>
                   void updateWhisperLanguage(v as WhisperLanguage)
@@ -660,9 +675,11 @@ function App() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Auto</SelectItem>
-                  <SelectItem value="de">German</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
+                  {WHISPER_LANGUAGE_ITEMS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
