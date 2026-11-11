@@ -43,6 +43,8 @@ pnpm download-model
 pnpm tauri dev
 ```
 
+Quit `/Applications/local-dictate.app` before `pnpm tauri dev`. Both register the same paste shortcuts, so one keypress runs both and one clipboard write fails. Details under [Global paste shortcuts](#global-paste-shortcuts).
+
 **First run:** allow **Microphone** when prompted. macOS also shows the **Accessibility** prompt (it opens the privacy list — there is no Allow button). Enable the app there, or **Terminal** / **Cursor** when running `pnpm tauri dev`.
 
 ---
@@ -91,6 +93,8 @@ pnpm tauri dev
 | **⌘⇧A** | Paste **all** segments in the session (newline-separated) |
 
 Paste requires **Accessibility** (trusted process + synthetic ⌘V). Without it, use the text already on the clipboard after each segment completes.
+
+Run **one** copy. `/Applications/local-dictate.app` and `pnpm tauri dev` both register ⌘⇧V / ⌘⇧B / ⌘⇧A. One keypress runs both, both write the clipboard, and one of them shows `NSPasteboard#writeObjects: returned false` even though the other paste succeeded. Quit the copy you are not testing.
 
 ---
 
@@ -251,7 +255,7 @@ Persisted file (macOS):
 
 - **macOS-first** — primary development and testing target.
 - **Default STT model** is **base**; tiny/small ship in tagged releases or via `pnpm download-all-models`.
-- **Global shortcuts** while monitoring depend on OS shortcut registration; conflicts with other apps are possible. Two running copies both receive the shortcut and race on the clipboard (`NSPasteboard` write fails in one of them). Quit the extra instance.
+- **Global shortcuts** while monitoring depend on OS shortcut registration; conflicts with other apps are possible. `/Applications/local-dictate.app` and `pnpm tauri dev` both receive the shortcut and one clipboard write fails. See [Global paste shortcuts](#global-paste-shortcuts).
 - Very quiet mics may still need physical gain despite peak normalization.
 
 ---
