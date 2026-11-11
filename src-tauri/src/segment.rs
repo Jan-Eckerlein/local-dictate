@@ -1,5 +1,7 @@
 //! Resample to 16 kHz mono and RMS-based voice activity segmentation (Whisper input format).
 
+use std::collections::VecDeque;
+
 pub const WHISPER_SAMPLE_RATE: u32 = 16_000;
 
 /// RMS above this → speech (tune per mic; documented for README).
@@ -12,6 +14,10 @@ pub const VAD_MAX_SEGMENT_MS: u32 = 30_000;
 pub const VAD_MIN_SEGMENT_MS: u32 = 200;
 /// Analysis frame size at 16 kHz.
 pub const VAD_FRAME_MS: u32 = 20;
+/// Audio kept before speech onset is confirmed (helps first syllables for Whisper).
+pub const VAD_PREROLL_MS: u32 = 300;
+/// Consecutive speech frames required before recording starts.
+pub const VAD_SPEECH_ONSET_FRAMES: u32 = 3;
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,6 +95,8 @@ struct VadConfig {
     max_segment_samples: usize,
     min_segment_samples: usize,
     frame_samples: usize,
+    preroll_samples: usize,
+    speech_onset_frames: usize,
 }
 
 impl Default for VadConfig {
@@ -100,6 +108,8 @@ impl Default for VadConfig {
             max_segment_samples: rate * VAD_MAX_SEGMENT_MS as usize / 1000,
             min_segment_samples: rate * VAD_MIN_SEGMENT_MS as usize / 1000,
             frame_samples: rate * VAD_FRAME_MS as usize / 1000,
+            preroll_samples: rate * VAD_PREROLL_MS as usize / 1000,
+            speech_onset_frames: VAD_SPEECH_ONSET_FRAMES as usize,
         }
     }
 }
@@ -110,6 +120,8 @@ pub struct VadProcessor {
     recording: bool,
     recording_buffer: Vec<f32>,
     silence_samples: usize,
+    preroll: VecDeque<f32>,
+    speech_streak: usize,
 }
 
 impl VadProcessor {
@@ -126,7 +138,27 @@ impl VadProcessor {
             recording: false,
             recording_buffer: Vec::new(),
             silence_samples: 0,
+            preroll: VecDeque::new(),
+            speech_streak: 0,
         }
+    }
+
+    fn push_preroll(&mut self, frame: &[f32]) {
+        for &sample in frame {
+            if self.preroll.len() >= self.config.preroll_samples {
+                self.preroll.pop_front();
+            }
+            self.preroll.push_back(sample);
+        }
+    }
+
+    fn begin_recording(&mut self) {
+        self.recording = true;
+        self.recording_buffer.clear();
+        self.recording_buffer.reserve(self.preroll.len());
+        self.recording_buffer.extend(self.preroll.iter().copied());
+        self.silence_samples = 0;
+        self.speech_streak = 0;
     }
 
     /// Push 16 kHz mono samples; returns completed segments (may be empty).
@@ -136,17 +168,22 @@ impl VadProcessor {
 
         while self.pending.len() >= self.config.frame_samples {
             let frame: Vec<f32> = self.pending.drain(..self.config.frame_samples).collect();
+            self.push_preroll(&frame);
             let rms = frame_rms(&frame);
             let speech = rms >= self.config.rms_threshold;
 
             if speech {
                 if !self.recording {
-                    self.recording = true;
-                    self.recording_buffer.clear();
+                    self.speech_streak += 1;
+                    if self.speech_streak >= self.config.speech_onset_frames {
+                        self.begin_recording();
+                    }
+                } else {
+                    self.silence_samples = 0;
+                    self.recording_buffer.extend_from_slice(&frame);
                 }
-                self.silence_samples = 0;
-                self.recording_buffer.extend_from_slice(&frame);
             } else if self.recording {
+                self.speech_streak = 0;
                 self.silence_samples += self.config.frame_samples;
                 self.recording_buffer.extend_from_slice(&frame);
 
@@ -157,6 +194,8 @@ impl VadProcessor {
                     self.recording = false;
                     self.silence_samples = 0;
                 }
+            } else {
+                self.speech_streak = 0;
             }
 
             if self.recording && self.recording_buffer.len() >= self.config.max_segment_samples {
@@ -200,5 +239,42 @@ mod tests {
         let s = vec![0.0_f32; 4800];
         let out = resample_linear(&s, 48_000, 16_000);
         assert_eq!(out.len(), 1600);
+    }
+
+    #[test]
+    fn vad_preroll_prefixes_segment() {
+        let rate = WHISPER_SAMPLE_RATE as usize;
+        let frame_samples = rate * VAD_FRAME_MS as usize / 1000;
+        let preroll_samples = rate * VAD_PREROLL_MS as usize / 1000;
+        let onset = VAD_SPEECH_ONSET_FRAMES as usize;
+
+        let mut vad = VadProcessor::with_rms_threshold(0.001);
+        let loud = 0.05_f32;
+
+        // Fill preroll with quiet audio, then trigger onset with loud frames.
+        for _ in 0..(preroll_samples / frame_samples + 2) {
+            let quiet: Vec<f32> = vec![0.0; frame_samples];
+            let _ = vad.push_resampled(&quiet);
+        }
+
+        let mut segments = Vec::new();
+        for _ in 0..onset {
+            let frame: Vec<f32> = vec![loud; frame_samples];
+            segments.extend(vad.push_resampled(&frame));
+        }
+        // Close segment with silence hang (many quiet frames).
+        let hang_frames = VAD_SILENCE_HANG_MS / VAD_FRAME_MS + 2;
+        for _ in 0..hang_frames {
+            let quiet: Vec<f32> = vec![0.0; frame_samples];
+            segments.extend(vad.push_resampled(&quiet));
+        }
+
+        let seg = segments
+            .last()
+            .expect("expected one completed segment after silence hang");
+        assert!(
+            seg.len() >= preroll_samples.saturating_sub(frame_samples),
+            "segment should include roughly one preroll window (onset frames are inside the ring)"
+        );
     }
 }

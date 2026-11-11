@@ -68,10 +68,10 @@ flowchart TB
 | ---------- | --------------------------------- | ------------------------------------------------------------------------------------ |
 | Platform   | macOS                             | Windows documented as untested unless time allows                                    |
 | STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json      |
-| Model size | `base` (default)                  | `pnpm download-model` / env; **UI selector at #14** (tiny/base/small, files on disk) |
+| Model size | `base` (default)                  | `pnpm download-model` / env; **UI selector at #15** (tiny/base/small, files on disk) |
 | VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                 |
 | Paste      | Clipboard + simulated ⌘V          | **⌘⇧V** / **⌘⇧B** / **⌘⇧A**; Accessibility required (macOS)                          |
-| UI         | Small window + meter              | Minimal HTML/CSS for milestones 4–9; **shadcn** + Tailwind at **#10**; tray deferred |
+| UI         | Small window + meter              | Minimal HTML/CSS for milestones 4–10; **shadcn** + Tailwind at **#11**; tray deferred |
 
 **Open (pick during build):**
 
@@ -96,13 +96,20 @@ Each step should compile or be an obvious WIP milestone.
 | 7   | Auto STT pipeline: VAD segment → `mpsc` whisper worker → live transcript (no manual Transcribe) | done |
 | 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en) | done        |
 | 9   | Global shortcut + paste (TextEdit / Notes test)                     | done                |
-| 10  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | todo                |
-| 11  | UI state machine + error / permission hints                         | todo                |
-| 12  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo                |
-| 13  | Release build (`pnpm tauri build`) + known limitations              | todo                |
-| 14  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | todo |
+| 10  | VAD **pre-roll** (~300 ms) + **speech onset** (3×20 ms frames) before record | done        |
+| 11  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | todo                |
+| 12  | UI state machine + error / permission hints                         | todo                |
+| 13  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo                |
+| 14  | Release build (`pnpm tauri build`) + known limitations              | todo                |
+| 15  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | todo |
 
-### Milestone #14 notes (Whisper model)
+### Milestone #10 notes (VAD pre-roll)
+
+- Constants in `segment.rs`: `VAD_PREROLL_MS`, `VAD_SPEECH_ONSET_FRAMES`.
+- Ring buffer while monitoring; prepend on confirmed onset (fewer clipped first words).
+- Re-test: “test eins zwei drei …” vs. replay / manual transcribe.
+
+### Milestone #15 notes (Whisper model)
 
 - Extend `settings.json` with `whisperModel` (filename or enum → `ggml-*.bin`).
 - UI: select next to language; show path + “missing — run download” if file absent.
@@ -113,10 +120,7 @@ Each step should compile or be an obvious WIP milestone.
 
 Not “prettier UI” alone — **#6** proved Whisper works; **#7** wires production flow: segment closes → queue → background transcribe → UI updates while monitoring (manual **Transcribe** stays optional/debug).
 - VAD finished segment → **`mpsc`** → dedicated Whisper worker thread (never block cpal); `transcript-ready` (or similar) + app state.
-- **VAD pre-roll (observed):** segments cut in on the first loud 20 ms frame — replay sounds correct but **starts abruptly**; Whisper often garbles the **first words** (e.g. “eins zwei” → “ein sei”). Not a loudness issue when replay is intelligible.
-  - Add ~**200–300 ms** ring pre-roll at 16 kHz prepended when speech is confirmed (or constant rolling buffer while monitoring).
-  - Optional **speech onset**: require **2–3 consecutive** speech frames before `recording` starts (tune with pre-roll so word attacks are not clipped).
-  - Re-test with same phrase: “test eins zwei drei …” vs. manual transcribe baseline.
+- **VAD pre-roll:** see **#10** (implemented).
 - **Level / SNR (observed):** transcript quality is clearly better when speaking **louder** than quietly (same wording). Quiet speech → lower sample amplitudes, VAD rides closer to threshold, Whisper gets weaker SNR — not only a “cut-in too fast” issue. Consider optional **peak normalize** before STT (cap ~0.9) if quiet dictation must work; document “mic gain / distance” for acceptance demos.
 - **Language:** Until **#8**, keep **auto-detect** (`set_language(None)`, `translate(false)`). Settings add persisted **auto / de / en** → `FullParams::set_language`.
 
