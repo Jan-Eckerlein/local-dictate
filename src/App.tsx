@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { notifyFromRaw, showAppToast } from "@/lib/app-toast";
+import { buildAppStatus, deriveUiPhase, type UiPhase } from "@/lib/ui-phase";
+import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -86,7 +88,6 @@ function App() {
   const [monitoring, setMonitoring] = useState(false);
   const [level, setLevel] = useState(0);
   const [info, setInfo] = useState<AudioMonitorInfo | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [micStatus, setMicStatus] = useState("");
   const [devices, setDevices] = useState<InputDeviceInfo[]>([]);
   const [selectedDevice, setSelectedDevice] = useState("");
@@ -141,7 +142,7 @@ function App() {
       });
       setAppSettings(next);
     } catch (e) {
-      setError(String(e));
+      notifyFromRaw(String(e));
     }
   }, []);
 
@@ -153,7 +154,7 @@ function App() {
         });
         setAppSettings(next);
       } catch (e) {
-        setError(String(e));
+        notifyFromRaw(String(e));
       }
     },
     [],
@@ -169,7 +170,7 @@ function App() {
         return fallback?.name ?? "";
       });
     } catch (e) {
-      setError(String(e));
+      notifyFromRaw(String(e));
     }
   }, []);
 
@@ -186,8 +187,6 @@ function App() {
     let unlistenTranscript: UnlistenFn | undefined;
     let unlistenTranscriptErr: UnlistenFn | undefined;
     let unlistenPasteErr: UnlistenFn | undefined;
-    let unlistenPasteDone: UnlistenFn | undefined;
-
     void (async () => {
       unlistenLevel = await listen<AudioLevelPayload>(
         "audio-level",
@@ -235,8 +234,9 @@ function App() {
       unlistenTranscriptErr = await listen<TranscriptErrorPayload>(
         "transcript-error",
         (event) => {
-          setError(
+          showAppToast(
             `STT #${event.payload.segmentIndex + 1}: ${event.payload.message}`,
+            "error",
           );
           setSttPendingIndex((pending) =>
             pending === event.payload.segmentIndex ? null : pending,
@@ -249,18 +249,10 @@ function App() {
       }
 
       unlistenPasteErr = await listen<string>("paste-error", (event) => {
-        setError(event.payload);
+        notifyFromRaw(event.payload);
       });
       if (cancelled) {
         await unlistenPasteErr();
-        return;
-      }
-
-      unlistenPasteDone = await listen("paste-done", () => {
-        setError(null);
-      });
-      if (cancelled) {
-        await unlistenPasteDone();
       }
     })();
 
@@ -271,20 +263,12 @@ function App() {
       void unlistenTranscript?.();
       void unlistenTranscriptErr?.();
       void unlistenPasteErr?.();
-      void unlistenPasteDone?.();
     };
   }, []);
-
-  const micAuthorized = micStatus === "authorized";
-  const axAuthorized = axStatus === "authorized";
 
   const openSettings = useCallback(() => {
     void invoke("open_microphone_settings").then(refreshMicStatus);
   }, [refreshMicStatus]);
-
-  const openAxSettings = useCallback(() => {
-    void invoke("open_accessibility_settings").then(refreshAxStatus);
-  }, [refreshAxStatus]);
 
   const runPaste = useCallback(
     async (
@@ -293,13 +277,11 @@ function App() {
         | "paste_since_last_copy"
         | "paste_all_transcripts",
     ) => {
-      setError(null);
       setPasteBusy(true);
       try {
         await invoke(command);
-        setError(null);
       } catch (e) {
-        setError(String(e));
+        notifyFromRaw(String(e));
       } finally {
         setPasteBusy(false);
         refreshAxStatus();
@@ -309,7 +291,6 @@ function App() {
   );
 
   const start = useCallback(async () => {
-    setError(null);
     try {
       const deviceInfo = await invoke<AudioMonitorInfo>("start_audio_monitor", {
         deviceName: selectedDevice || null,
@@ -325,13 +306,12 @@ function App() {
       refreshMicStatus();
     } catch (e) {
       setMonitoring(false);
-      setError(String(e));
+      notifyFromRaw(String(e));
       refreshMicStatus();
     }
   }, [refreshMicStatus, selectedDevice]);
 
   const stop = useCallback(async () => {
-    setError(null);
     try {
       await invoke("stop_audio_monitor");
       setMonitoring(false);
@@ -341,12 +321,11 @@ function App() {
       );
       setSessionSegments(list);
     } catch (e) {
-      setError(String(e));
+      notifyFromRaw(String(e));
     }
   }, []);
 
   const transcribeSegment = useCallback(async (index: number) => {
-    setError(null);
     setTranscribingIndex(index);
     try {
       const result = await invoke<TranscriptResult>(
@@ -359,19 +338,18 @@ function App() {
       }));
       void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
     } catch (e) {
-      setError(String(e));
+      notifyFromRaw(String(e));
     } finally {
       setTranscribingIndex(null);
     }
   }, []);
 
   const replaySegment = useCallback(async (index: number) => {
-    setError(null);
     setReplayingIndex(index);
     try {
       await invoke("replay_session_segment", { index });
     } catch (e) {
-      setError(String(e));
+      notifyFromRaw(String(e));
     } finally {
       setReplayingIndex(null);
     }
@@ -379,69 +357,79 @@ function App() {
 
   const pct = Math.round(Math.min(1, level) * 100);
 
+  const axAuthorized = axStatus === "authorized";
+
+  const uiPhase = useMemo(
+    () =>
+      deriveUiPhase({
+        micStatus,
+        monitoring,
+        whisperExists: whisperModel?.exists ?? null,
+        sttPendingIndex,
+      }),
+    [micStatus, monitoring, whisperModel?.exists, sttPendingIndex],
+  );
+
+  const status = useMemo(
+    () =>
+      buildAppStatus(uiPhase, {
+        axAuthorized,
+        hasTranscript: Boolean(latestTranscript),
+        pasteBusy,
+      }),
+    [uiPhase, axAuthorized, latestTranscript, pasteBusy],
+  );
+
+  const phaseToasted = useRef<Set<UiPhase>>(new Set());
+
+  useEffect(() => {
+    if (uiPhase === "loading") return;
+    if (phaseToasted.current.has(uiPhase)) return;
+
+    if (uiPhase === "needs_model") {
+      showAppToast(
+        "Whisper model not found. Run pnpm download-model in the project root, then restart.",
+        "alert",
+      );
+      phaseToasted.current.add(uiPhase);
+      return;
+    }
+
+    if (uiPhase === "needs_mic") {
+      const message =
+        micStatus === "denied"
+          ? "Microphone denied — enable this app under System Settings → Privacy & Security → Microphone."
+          : "Microphone access is required to start monitoring.";
+      showAppToast(message, "alert", {
+        action: {
+          label: "Settings",
+          onClick: () => void openSettings(),
+        },
+      });
+      phaseToasted.current.add(uiPhase);
+    }
+  }, [uiPhase, micStatus, openSettings]);
+
   return (
     <div className="relative min-h-screen">
+      <Toaster themeMode={theme} />
       <div className="absolute top-4 right-4 z-10">
         <ThemeSwitcher value={theme} onChange={setTheme} />
       </div>
       <main className="mx-auto flex w-full max-w-lg flex-col gap-4 p-4 pb-8">
         <header className="space-y-1 pr-28">
-          <h1 className="text-2xl font-semibold tracking-tight">local-dictate</h1>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              local-dictate
+            </h1>
+            <span className="text-muted-foreground text-xs font-medium">
+              {status.label}
+            </span>
+          </div>
           <p className="text-muted-foreground text-sm">
             VAD → local Whisper · ⌘⇧V last · ⌘⇧B batch · ⌘⇧A all
           </p>
         </header>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {!micAuthorized && (
-        <Alert>
-          <AlertTitle>Microphone: {micStatus || "…"}</AlertTitle>
-          <AlertDescription className="space-y-2">
-            {micStatus === "denied" &&
-              "Enable Cursor/Terminal or this app in System Settings → Privacy → Microphone."}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={openSettings}
-            >
-              Open microphone settings
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {!axAuthorized && (
-        <Alert>
-          <AlertTitle>Accessibility: {axStatus || "…"}</AlertTitle>
-          <AlertDescription className="space-y-2">
-            Required to paste into TextEdit, Notes, Cursor, etc.
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={openAxSettings}
-            >
-              Open accessibility settings
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {whisperModel && !whisperModel.exists && (
-        <Alert variant="destructive">
-          <AlertTitle>Whisper model missing</AlertTitle>
-          <AlertDescription>
-            Run <code className="text-sm">pnpm download-model</code>
-          </AlertDescription>
-        </Alert>
-      )}
 
       <Card>
         <CardHeader className="pb-2">
@@ -458,7 +446,7 @@ function App() {
             type="button"
             variant="secondary"
             size="sm"
-            disabled={pasteBusy || !latestTranscript}
+            disabled={!status.canPaste}
             onClick={() => void runPaste("paste_last_transcript")}
           >
             Last (⌘⇧V)
@@ -467,7 +455,7 @@ function App() {
             type="button"
             variant="secondary"
             size="sm"
-            disabled={pasteBusy || !latestTranscript}
+            disabled={!status.canPaste}
             onClick={() => void runPaste("paste_since_last_copy")}
           >
             Batch (⌘⇧B)
@@ -476,7 +464,7 @@ function App() {
             type="button"
             variant="secondary"
             size="sm"
-            disabled={pasteBusy || !latestTranscript}
+            disabled={!status.canPaste}
             onClick={() => void runPaste("paste_all_transcripts")}
           >
             All (⌘⇧A)
@@ -580,6 +568,7 @@ function App() {
         className="w-full"
         size="lg"
         variant={monitoring ? "secondary" : "default"}
+        disabled={!monitoring && !status.canStartMonitoring}
         onClick={() => void (monitoring ? stop() : start())}
       >
         {monitoring ? "Stop monitoring" : "Start monitoring"}
