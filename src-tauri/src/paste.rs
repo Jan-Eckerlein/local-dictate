@@ -1,5 +1,6 @@
 //! Clipboard + synthetic paste shortcut (⌘V on macOS).
 
+use crate::notice::AppNotice;
 use std::thread;
 use std::time::Duration;
 
@@ -15,17 +16,17 @@ pub fn copy_to_clipboard(text: &str) -> Result<(), String> {
         .map_err(|e| format!("clipboard write: {e}"))
 }
 
-pub fn paste_text(text: &str) -> Result<(), String> {
+pub fn paste_text(text: &str) -> Result<(), AppNotice> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
-        return Err("nothing to paste".into());
+        return Err(AppNotice::warn("nothing to paste"));
     }
 
-    copy_to_clipboard(trimmed)?;
+    copy_to_clipboard(trimmed).map_err(AppNotice::error)?;
 
     // Clipboard must be visible before the synthetic paste (Electron targets are picky).
     thread::sleep(Duration::from_millis(120));
-    simulate_paste_shortcut()?;
+    simulate_paste_shortcut().map_err(AppNotice::error)?;
     thread::sleep(Duration::from_millis(50));
     Ok(())
 }

@@ -3,8 +3,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   dismissAppToast,
-  notifyFromRaw,
   showAppToast,
+  showNotice,
   TOAST_ID,
 } from "@/lib/app-toast";
 import { buildAppStatus, deriveUiPhase } from "@/lib/ui-phase";
@@ -189,7 +189,7 @@ function App() {
       });
       setAppSettings(next);
     } catch (e) {
-      notifyFromRaw(String(e));
+      showAppToast(String(e), "error");
     }
   }, []);
 
@@ -201,7 +201,7 @@ function App() {
         });
         setAppSettings(next);
       } catch (e) {
-        notifyFromRaw(String(e));
+        showAppToast(String(e), "error");
       }
     },
     [],
@@ -215,7 +215,7 @@ function App() {
       setAppSettings(next);
       refreshWhisperModel();
     } catch (e) {
-      notifyFromRaw(String(e));
+      showAppToast(String(e), "error");
     }
   }, [refreshWhisperModel]);
 
@@ -229,7 +229,7 @@ function App() {
         return fallback?.name ?? "";
       });
     } catch (e) {
-      notifyFromRaw(String(e));
+      showAppToast(String(e), "error");
     }
   }, []);
 
@@ -305,8 +305,8 @@ function App() {
         return;
       }
 
-      unlistenPasteErr = await listen<string>("paste-error", (event) => {
-        notifyFromRaw(event.payload);
+      unlistenPasteErr = await listen<unknown>("paste-error", (event) => {
+        showNotice(event.payload);
       });
       if (cancelled) {
         await unlistenPasteErr();
@@ -342,7 +342,7 @@ function App() {
       try {
         await invoke(command);
       } catch (e) {
-        notifyFromRaw(String(e));
+        showNotice(e);
       } finally {
         setPasteBusy(false);
         refreshAxStatus();
@@ -367,7 +367,7 @@ function App() {
       refreshMicStatus();
     } catch (e) {
       setMonitoring(false);
-      notifyFromRaw(String(e));
+      showAppToast(String(e), "error");
       refreshMicStatus();
     }
   }, [refreshMicStatus, selectedDevice]);
@@ -382,7 +382,7 @@ function App() {
       );
       setSessionSegments(list);
     } catch (e) {
-      notifyFromRaw(String(e));
+      showAppToast(String(e), "error");
     }
   }, []);
 
@@ -399,7 +399,7 @@ function App() {
       }));
       refreshWhisperModel();
     } catch (e) {
-      notifyFromRaw(String(e));
+      showAppToast(String(e), "error");
     } finally {
       setTranscribingIndex(null);
     }
@@ -410,7 +410,7 @@ function App() {
     try {
       await invoke("replay_session_segment", { index });
     } catch (e) {
-      notifyFromRaw(String(e));
+      showAppToast(String(e), "error");
     } finally {
       setReplayingIndex(null);
     }

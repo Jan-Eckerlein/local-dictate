@@ -1,5 +1,6 @@
 mod audio;
 mod macos_accessibility;
+mod notice;
 mod macos_mic;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod paste;
@@ -15,6 +16,7 @@ use segment::AudioSegmentPayload;
 use settings::{AppSettings, SettingsState, WhisperLanguage, WhisperModelFile};
 use stt::{list_whisper_model_options, SttState, WhisperModelInfo, WhisperModelOption};
 use stt_worker::{spawn_stt_worker, SttJob};
+use notice::{AppNotice, NoticeAction};
 use transcript_buffer::{PasteScope, TranscriptBuffer};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -92,8 +94,10 @@ fn get_latest_transcript(buffer: State<'_, TranscriptBuffer>) -> Result<Option<S
     buffer.latest()
 }
 
-fn paste_with_scope(buffer: &TranscriptBuffer, scope: PasteScope) -> Result<(), String> {
-    macos_accessibility::ensure_trusted()?;
+fn paste_with_scope(buffer: &TranscriptBuffer, scope: PasteScope) -> Result<(), AppNotice> {
+    macos_accessibility::ensure_trusted().map_err(|message| {
+        AppNotice::error(message).with_action(NoticeAction::Accessibility)
+    })?;
     let text = buffer.text_for_paste(scope)?;
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
@@ -102,24 +106,24 @@ fn paste_with_scope(buffer: &TranscriptBuffer, scope: PasteScope) -> Result<(), 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
         let _ = text;
-        return Err("paste not supported on this platform".into());
+        return Err(AppNotice::error("paste not supported on this platform"));
     }
-    buffer.commit_copy(scope)?;
+    buffer.commit_copy(scope).map_err(AppNotice::error)?;
     Ok(())
 }
 
 #[tauri::command]
-fn paste_last_transcript(buffer: State<'_, TranscriptBuffer>) -> Result<(), String> {
+fn paste_last_transcript(buffer: State<'_, TranscriptBuffer>) -> Result<(), AppNotice> {
     paste_with_scope(&buffer, PasteScope::LastSegment)
 }
 
 #[tauri::command]
-fn paste_since_last_copy(buffer: State<'_, TranscriptBuffer>) -> Result<(), String> {
+fn paste_since_last_copy(buffer: State<'_, TranscriptBuffer>) -> Result<(), AppNotice> {
     paste_with_scope(&buffer, PasteScope::SinceLastCopy)
 }
 
 #[tauri::command]
-fn paste_all_transcripts(buffer: State<'_, TranscriptBuffer>) -> Result<(), String> {
+fn paste_all_transcripts(buffer: State<'_, TranscriptBuffer>) -> Result<(), AppNotice> {
     paste_with_scope(&buffer, PasteScope::All)
 }
 
@@ -130,8 +134,8 @@ fn paste_from_shortcut(app: &tauri::AppHandle, scope: PasteScope) {
         Ok(()) => {
             let _ = app.emit("paste-done", ());
         }
-        Err(message) => {
-            let _ = app.emit("paste-error", message);
+        Err(notice) => {
+            let _ = app.emit("paste-error", notice);
         }
     }
 }

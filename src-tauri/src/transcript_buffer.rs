@@ -1,3 +1,4 @@
+use crate::notice::AppNotice;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -46,13 +47,15 @@ impl TranscriptBuffer {
         Ok(guard.values().next_back().cloned())
     }
 
-    pub fn text_for_paste(&self, scope: PasteScope) -> Result<String, String> {
+    pub fn text_for_paste(&self, scope: PasteScope) -> Result<String, AppNotice> {
         let guard = self
             .segments
             .lock()
-            .map_err(|_| "transcript buffer lock poisoned".to_string())?;
+            .map_err(|_| AppNotice::error("transcript buffer lock poisoned"))?;
         if guard.is_empty() {
-            return Err("no transcript yet — speak while monitoring, then try again".into());
+            return Err(AppNotice::warn(
+                "no transcript yet — speak while monitoring, then try again",
+            ));
         }
 
         let text = match scope {
@@ -60,12 +63,12 @@ impl TranscriptBuffer {
                 .iter()
                 .next_back()
                 .map(|(_, t)| t.clone())
-                .ok_or_else(|| "no transcript yet".to_string())?,
+                .ok_or_else(|| AppNotice::warn("no transcript yet"))?,
             PasteScope::SinceLastCopy => {
                 let through = self
                     .copied_through_index
                     .lock()
-                    .map_err(|_| "transcript buffer lock poisoned".to_string())?;
+                    .map_err(|_| AppNotice::error("transcript buffer lock poisoned"))?;
                 let pending: Vec<&String> = guard
                     .iter()
                     .filter(|(index, _)| match *through {
@@ -75,9 +78,9 @@ impl TranscriptBuffer {
                     .map(|(_, t)| t)
                     .collect();
                 if pending.is_empty() {
-                    return Err(
-                        "no new segments since last paste (⌘⇧V, ⌘⇧B, or ⌘⇧A)".into(),
-                    );
+                    return Err(AppNotice::info(
+                        "no new segments since last paste (⌘⇧V, ⌘⇧B, or ⌘⇧A)",
+                    ));
                 }
                 join_lines(pending)
             }

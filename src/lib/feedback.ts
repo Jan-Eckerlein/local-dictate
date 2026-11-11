@@ -1,43 +1,49 @@
-export type FeedbackKind = "error" | "info" | "alert";
+export type FeedbackKind = "info" | "warn" | "error";
 
-export interface UserFeedback {
+/** Payload declared by the caller. Kind is not inferred from the message text. */
+export interface AppNotice {
   message: string;
   kind: FeedbackKind;
+  action?: "accessibility";
 }
 
-function isPasteInfoMessage(message: string): boolean {
-  const lower = message.toLowerCase();
-  return lower.includes("no new segments since last paste");
+function isKind(value: unknown): value is FeedbackKind {
+  return value === "info" || value === "warn" || value === "error";
 }
 
-function isPermissionErrorMessage(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("model not found") ||
-    lower.includes("whisper model") ||
-    lower.includes("microphone") ||
-    lower.includes("accessibility") ||
-    lower.includes("not trusted")
-  );
-}
-
-function isAlertMessage(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("no transcript yet") || lower.includes("nothing to paste")
-  );
-}
-
-export function feedbackFromRaw(raw: string): UserFeedback {
-  const message = raw.trim();
-  if (isPasteInfoMessage(message)) {
-    return { message, kind: "info" };
+function unwrap(raw: unknown): unknown {
+  if (typeof raw !== "string") return raw;
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{")) return raw;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return raw;
   }
-  if (isPermissionErrorMessage(message)) {
-    return { message, kind: "error" };
+}
+
+export function asNotice(raw: unknown): AppNotice {
+  const value = unwrap(raw);
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    "kind" in value &&
+    typeof value.message === "string" &&
+    isKind(value.kind)
+  ) {
+    const action =
+      "action" in value && value.action === "accessibility"
+        ? ("accessibility" as const)
+        : undefined;
+    return { message: value.message, kind: value.kind, action };
   }
-  if (isAlertMessage(message)) {
-    return { message, kind: "alert" };
-  }
+
+  const message =
+    typeof raw === "string"
+      ? raw.trim()
+      : raw instanceof Error
+        ? raw.message
+        : String(raw);
   return { message, kind: "error" };
 }
