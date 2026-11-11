@@ -15,7 +15,9 @@ mod ffi {
     #[link(name = "System")]
     unsafe extern "C" {
         fn pthread_main_np() -> i32;
-        fn dispatch_get_main_queue() -> *mut std::ffi::c_void;
+        /// `dispatch_get_main_queue()` is a header inline of `&_dispatch_main_q`.
+        /// Newer SDKs (Xcode 26) do not export the function symbol.
+        static _dispatch_main_q: u8;
         fn dispatch_sync_f(
             queue: *mut std::ffi::c_void,
             context: *mut std::ffi::c_void,
@@ -34,7 +36,7 @@ mod ffi {
         }
         unsafe {
             dispatch_sync_f(
-                dispatch_get_main_queue(),
+                &raw const _dispatch_main_q as *mut std::ffi::c_void,
                 std::ptr::null_mut(),
                 show_prompt_on_main,
             );
