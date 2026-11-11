@@ -100,7 +100,7 @@ Each step should compile or be an obvious WIP milestone.
 | 11  | **Peak normalize** quiet segments before Whisper (`normalize_peak_for_stt`)                                                        | done                |
 | 12  | Tailwind + shadcn foundation (Button, Select, Alert, …)                                                                            | done                |
 | 13  | UI state machine + error / permission hints                                                                                        | done                |
-| 14  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md`                                                                | todo                |
+| 14  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md`                                                                | done                |
 | 15  | Release build (`pnpm tauri build`) + known limitations                                                                             | todo                |
 | 16  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | todo                |
 
@@ -109,6 +109,11 @@ Each step should compile or be an obvious WIP milestone.
 - Constants in `segment.rs`: `VAD_PREROLL_MS`, `VAD_SPEECH_ONSET_FRAMES`.
 - Ring buffer while monitoring; prepend on confirmed onset (fewer clipped first words).
 - Re-test: “test eins zwei drei …” vs. replay / manual transcribe.
+
+### Milestone #14 notes (README)
+
+- `README.md`: requirements, quick start, model download, shortcuts, permissions, architecture diagram, VAD constants, settings path.
+- `docs/ai-usage.md`: tools, verification scope, commit audit trail for review.
 
 ### Milestone #13 notes (UI phase)
 
