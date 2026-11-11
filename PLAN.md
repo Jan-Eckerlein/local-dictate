@@ -71,7 +71,7 @@ flowchart TB
 | Model size | `base` (default) | `small` as optional upgrade in README |
 | VAD | RMS + silence hang + max duration | Constants documented in README |
 | Paste | Clipboard + simulated ⌘V | Accessibility permission likely required |
-| UI | Small window + meter | Tray-only deferred |
+| UI | Small window + meter | Minimal HTML/CSS for milestones 4–7; **shadcn** + Tailwind at **#8**; tray deferred |
 
 **Open (pick during build):**
 
@@ -94,9 +94,10 @@ Each step should compile or be an obvious WIP milestone.
 | 5 | `whisper-rs` + model download script | todo |
 | 6 | End-to-end: silence → transcript in app state | todo |
 | 7 | Global shortcut + paste (TextEdit / Notes test) | todo |
-| 8 | UI state machine + error / permission hints | todo |
-| 9 | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo |
-| 10 | Release build (`pnpm tauri build`) + known limitations | todo |
+| 8 | Tailwind + shadcn foundation (Button, Select, Alert, …) | todo |
+| 9 | UI state machine + error / permission hints | todo |
+| 10 | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo |
+| 11 | Release build (`pnpm tauri build`) + known limitations | todo |
 
 ---
 
