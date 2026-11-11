@@ -15,12 +15,10 @@ const DURATION: Record<FeedbackKind, number> = {
 };
 
 const KIND_CLASS: Record<FeedbackKind, string> = {
-  info:
-    "!border-blue-500/45 !bg-blue-500/12 !text-foreground dark:!bg-blue-500/20 [&_[data-title]]:text-foreground",
-  warn:
-    "!border-amber-500/50 !bg-amber-500/14 !text-foreground dark:!bg-amber-500/18 [&_[data-title]]:text-foreground",
+  info: "!border-blue-500/50 !bg-blue-50/40 !text-foreground !backdrop-blur-sm dark:!bg-blue-950/50 [&_[data-title]]:text-foreground",
+  warn: "!border-amber-500/40 !bg-amber-50/40 !text-foreground !backdrop-blur-sm dark:!bg-amber-950/50 [&_[data-title]]:text-foreground",
   error:
-    "!border-destructive/55 !bg-destructive/12 !text-destructive dark:!bg-destructive/18",
+    "!border-destructive/40 !bg-red-50/40 !text-destructive !backdrop-blur-sm dark:!bg-red-950/50",
 };
 
 export function showAppToast(
