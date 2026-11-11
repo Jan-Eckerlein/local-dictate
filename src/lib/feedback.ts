@@ -10,18 +10,21 @@ function isPasteInfoMessage(message: string): boolean {
   return lower.includes("no new segments since last batch paste");
 }
 
-function isModelMissingMessage(message: string): boolean {
+function isPermissionErrorMessage(message: string): boolean {
   const lower = message.toLowerCase();
-  return lower.includes("model not found") || lower.includes("whisper model");
+  return (
+    lower.includes("model not found") ||
+    lower.includes("whisper model") ||
+    lower.includes("microphone") ||
+    lower.includes("accessibility") ||
+    lower.includes("not trusted")
+  );
 }
 
 function isAlertMessage(message: string): boolean {
   const lower = message.toLowerCase();
   return (
-    lower.includes("accessibility") ||
-    lower.includes("not trusted") ||
-    lower.includes("no transcript yet") ||
-    lower.includes("nothing to paste")
+    lower.includes("no transcript yet") || lower.includes("nothing to paste")
   );
 }
 
@@ -30,7 +33,7 @@ export function feedbackFromRaw(raw: string): UserFeedback {
   if (isPasteInfoMessage(message)) {
     return { message, kind: "info" };
   }
-  if (isModelMissingMessage(message)) {
+  if (isPermissionErrorMessage(message)) {
     return { message, kind: "error" };
   }
   if (isAlertMessage(message)) {

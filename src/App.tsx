@@ -1,8 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { notifyFromRaw, showAppToast } from "@/lib/app-toast";
-import { buildAppStatus, deriveUiPhase, type UiPhase } from "@/lib/ui-phase";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  dismissAppToast,
+  notifyFromRaw,
+  showAppToast,
+  TOAST_ID,
+} from "@/lib/app-toast";
+import { buildAppStatus, deriveUiPhase } from "@/lib/ui-phase";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -135,6 +140,15 @@ function App() {
     void invoke<AppSettings>("get_app_settings").then(setAppSettings);
     void invoke<string>("request_microphone_permission").then(setMicStatus);
   }, [refreshMicStatus, refreshAxStatus, refreshLatestTranscript]);
+
+  // Keep mic / Accessibility TCC in sync with System Settings (toast can clear).
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      refreshMicStatus();
+      refreshAxStatus();
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, [refreshMicStatus, refreshAxStatus]);
 
   const updateVadThreshold = useCallback(async (vadRmsThreshold: number) => {
     try {
@@ -271,6 +285,10 @@ function App() {
     void invoke("open_microphone_settings").then(refreshMicStatus);
   }, [refreshMicStatus]);
 
+  const openAxSettings = useCallback(() => {
+    void invoke("open_accessibility_settings").then(refreshAxStatus);
+  }, [refreshAxStatus]);
+
   const runPaste = useCallback(
     async (
       command:
@@ -381,36 +399,54 @@ function App() {
     [uiPhase, axAuthorized, latestTranscript, pasteBusy],
   );
 
-  const phaseToasted = useRef<Set<UiPhase>>(new Set());
-
   useEffect(() => {
-    if (uiPhase === "loading") return;
-    if (phaseToasted.current.has(uiPhase)) return;
-
-    if (uiPhase === "needs_model") {
-      const path = whisperModel?.path ?? "models/ggml-base.bin";
-      showAppToast(
-        `Whisper model not found. Expected at: ${path}. For a dev build run pnpm download-model; release builds should bundle the model — reinstall the latest DMG or place ggml-base.bin under Application Support.`,
-        "error",
-      );
-      phaseToasted.current.add(uiPhase);
+    if (whisperModel === null) return;
+    if (whisperModel.exists) {
+      dismissAppToast(TOAST_ID.model);
       return;
     }
+    showAppToast(
+      `Whisper model not found. Expected at: ${whisperModel.path}. For a dev build run pnpm download-model; release builds should bundle the model — reinstall the latest DMG or place ggml-base.bin under Application Support.`,
+      "error",
+      { id: TOAST_ID.model },
+    );
+  }, [whisperModel]);
 
-    if (uiPhase === "needs_mic") {
-      const message =
-        micStatus === "denied"
-          ? "Microphone denied — enable this app under System Settings → Privacy & Security → Microphone."
-          : "Microphone access is required to start monitoring.";
-      showAppToast(message, "error", {
+  useEffect(() => {
+    if (micStatus === "" || micStatus === "authorized") {
+      dismissAppToast(TOAST_ID.mic);
+      return;
+    }
+    const message =
+      micStatus === "denied"
+        ? "Microphone denied — enable this app under System Settings → Privacy & Security → Microphone."
+        : "Microphone access is required to start monitoring.";
+    showAppToast(message, "error", {
+      id: TOAST_ID.mic,
+      action: {
+        label: "Settings",
+        onClick: () => void openSettings(),
+      },
+    });
+  }, [micStatus, openSettings]);
+
+  useEffect(() => {
+    if (axStatus === "" || axStatus === "authorized") {
+      dismissAppToast(TOAST_ID.ax);
+      return;
+    }
+    showAppToast(
+      "Accessibility is required for paste shortcuts (⌘⇧V / B / A). Enable this app under System Settings → Privacy & Security → Accessibility.",
+      "error",
+      {
+        id: TOAST_ID.ax,
         action: {
           label: "Settings",
-          onClick: () => void openSettings(),
+          onClick: () => void openAxSettings(),
         },
-      });
-      phaseToasted.current.add(uiPhase);
-    }
-  }, [uiPhase, micStatus, openSettings, whisperModel?.path]);
+      },
+    );
+  }, [axStatus, openAxSettings]);
 
   return (
     <div className="relative min-h-screen">

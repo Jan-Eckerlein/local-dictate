@@ -2,6 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { toast, type ExternalToast } from "sonner";
 import { feedbackFromRaw, type FeedbackKind } from "@/lib/feedback";
 
+export const TOAST_ID = {
+  mic: "permission-mic",
+  ax: "permission-ax",
+  model: "whisper-model",
+} as const;
+
 const DURATION: Record<FeedbackKind, number> = {
   info: 6_000,
   alert: 10_000,
@@ -45,15 +51,16 @@ export function showAppToast(
   }
 }
 
+export function dismissAppToast(id: string) {
+  toast.dismiss(id);
+}
+
 function withContextActions(
   message: string,
   options?: ExternalToast,
 ): ExternalToast | undefined {
   const lower = message.toLowerCase();
-  if (
-    lower.includes("accessibility") ||
-    lower.includes("not trusted")
-  ) {
+  if (lower.includes("accessibility") || lower.includes("not trusted")) {
     return {
       ...options,
       action: {
@@ -69,5 +76,22 @@ function withContextActions(
 
 export function notifyFromRaw(raw: string, options?: ExternalToast) {
   const { message, kind } = feedbackFromRaw(raw);
-  showAppToast(message, kind, withContextActions(message, options));
+  const lower = message.toLowerCase();
+  const stickyId =
+    lower.includes("accessibility") || lower.includes("not trusted")
+      ? TOAST_ID.ax
+      : lower.includes("microphone")
+        ? TOAST_ID.mic
+        : lower.includes("model not found") || lower.includes("whisper model")
+          ? TOAST_ID.model
+          : undefined;
+
+  showAppToast(
+    message,
+    kind,
+    withContextActions(message, {
+      ...options,
+      ...(stickyId ? { id: stickyId } : {}),
+    }),
+  );
 }
