@@ -6,8 +6,10 @@ CFLAGS = "-mmacosx-version-min=11.0"
 CXXFLAGS = "-mmacosx-version-min=11.0"
 
 [target.aarch64-apple-darwin]
+# arm64 + ggml-metal @available: defer ___isPlatformVersionAtLeast to runtime (libSystem on 11+).
 rustflags = [
   "-C", "link-arg=-mmacosx-version-min=11.0",
+  "-C", "link-arg=-Wl,-undefined,dynamic_lookup",
 ]
 
 [target.x86_64-apple-darwin]

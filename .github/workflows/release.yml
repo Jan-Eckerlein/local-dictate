@@ -35,7 +35,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          shared-key: macos11-metal
+          shared-key: macos-arm64-metal-link
       - run: pnpm install --frozen-lockfile
       - run: pnpm tauri build
       - name: Collect bundle paths
