@@ -230,19 +230,27 @@ function App() {
     void invoke("open_accessibility_settings").then(refreshAxStatus);
   }, [refreshAxStatus]);
 
-  const pasteLast = useCallback(async () => {
-    setError(null);
-    setPasteBusy(true);
-    try {
-      await invoke("paste_last_transcript");
+  const runPaste = useCallback(
+    async (
+      command:
+        | "paste_last_transcript"
+        | "paste_since_last_copy"
+        | "paste_all_transcripts",
+    ) => {
       setError(null);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setPasteBusy(false);
-      refreshAxStatus();
-    }
-  }, [refreshAxStatus]);
+      setPasteBusy(true);
+      try {
+        await invoke(command);
+        setError(null);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setPasteBusy(false);
+        refreshAxStatus();
+      }
+    },
+    [refreshAxStatus],
+  );
 
   const start = useCallback(async () => {
     setError(null);
@@ -256,6 +264,7 @@ function App() {
       setSessionSegments([]);
       setTranscripts({});
       setSttPendingIndex(null);
+      setLatestTranscript(null);
       setMonitoring(true);
       refreshMicStatus();
     } catch (e) {
@@ -310,7 +319,7 @@ function App() {
     <main className="container">
       <h1>local-dictate</h1>
       <p className="subtitle">
-        VAD → local Whisper · new segments copy to clipboard · ⌘⇧V pastes into focused app
+        VAD → local Whisper · paste shortcuts: ⌘⇧V last · ⌘⇧B since last batch · ⌘⇧A all
       </p>
 
       {!micAuthorized && (
@@ -338,18 +347,37 @@ function App() {
         </div>
       )}
 
-      <section className="paste-block" aria-label="Paste last transcript">
+      <section className="paste-block" aria-label="Paste transcripts">
         <p className="hint">
-          Latest transcript:{" "}
+          Latest segment:{" "}
           <strong>{latestTranscript ? latestTranscript.slice(0, 120) : "none yet"}</strong>
         </p>
-        <button
-          type="button"
-          disabled={pasteBusy || !latestTranscript}
-          onClick={() => void pasteLast()}
-        >
-          {pasteBusy ? "Pasting…" : "Paste latest (⌘⇧V) — or ⌘V after a new transcript"}
-        </button>
+        <div className="paste-actions">
+          <button
+            type="button"
+            disabled={pasteBusy || !latestTranscript}
+            onClick={() => void runPaste("paste_last_transcript")}
+          >
+            {pasteBusy ? "…" : "Last (⌘⇧V)"}
+          </button>
+          <button
+            type="button"
+            disabled={pasteBusy || !latestTranscript}
+            onClick={() => void runPaste("paste_since_last_copy")}
+          >
+            {pasteBusy ? "…" : "Since last batch (⌘⇧B)"}
+          </button>
+          <button
+            type="button"
+            disabled={pasteBusy || !latestTranscript}
+            onClick={() => void runPaste("paste_all_transcripts")}
+          >
+            {pasteBusy ? "…" : "All (⌘⇧A)"}
+          </button>
+        </div>
+        <p className="hint">
+          Each segment still auto-copies when transcribed — ⌘V works for the newest line only.
+        </p>
       </section>
 
       {devices.length > 0 && (

@@ -70,12 +70,12 @@ flowchart TB
 | STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json      |
 | Model size | `base` (default)                  | `pnpm download-model` / env; **UI selector at #14** (tiny/base/small, files on disk) |
 | VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                 |
-| Paste      | Clipboard + simulated ⌘V          | Global **⌘⇧V** + UI button; Accessibility required (macOS)                           |
+| Paste      | Clipboard + simulated ⌘V          | **⌘⇧V** / **⌘⇧B** / **⌘⇧A**; Accessibility required (macOS)                          |
 | UI         | Small window + meter              | Minimal HTML/CSS for milestones 4–9; **shadcn** + Tailwind at **#10**; tray deferred |
 
 **Open (pick during build):**
 
-- [x] Shortcut scheme: **⌘⇧V** pastes latest transcript (monitoring via UI)
+- [x] Paste shortcuts: **⌘⇧V** last segment · **⌘⇧B** since last batch · **⌘⇧A** all (monitoring via UI)
 - [ ] Assignment receipt date in README (deadline line)
 
 ---

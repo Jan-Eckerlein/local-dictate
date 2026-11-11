@@ -36,7 +36,7 @@ pub fn spawn_stt_worker(
         while let Ok(job) = rx.recv() {
             match stt.transcribe(&job.samples, &settings) {
                 Ok(text) => {
-                    transcripts.set_latest(text.clone());
+                    transcripts.record_segment(job.index, text.clone());
                     #[cfg(not(any(target_os = "android", target_os = "ios")))]
                     {
                         let _ = crate::paste::copy_to_clipboard(&text);

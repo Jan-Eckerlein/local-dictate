@@ -202,6 +202,17 @@
   text-align: left;
 }
 
+.paste-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.paste-actions button {
+  flex: 1 1 auto;
+  min-width: 7rem;
+}
+
 .permission-block {
   display: flex;
   flex-direction: column;
