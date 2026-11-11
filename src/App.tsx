@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { useTheme } from "@/hooks/use-theme";
+import { type ThemeMode } from "@/lib/theme";
 
 interface AudioMonitorInfo {
   sampleRate: number;
@@ -88,18 +90,27 @@ function App() {
   const [micStatus, setMicStatus] = useState("");
   const [devices, setDevices] = useState<InputDeviceInfo[]>([]);
   const [selectedDevice, setSelectedDevice] = useState("");
-  const [lastSegment, setLastSegment] = useState<AudioSegmentPayload | null>(null);
+  const [lastSegment, setLastSegment] = useState<AudioSegmentPayload | null>(
+    null,
+  );
   const [segmentCount, setSegmentCount] = useState(0);
-  const [sessionSegments, setSessionSegments] = useState<SessionSegmentSummary[]>([]);
+  const [sessionSegments, setSessionSegments] = useState<
+    SessionSegmentSummary[]
+  >([]);
   const [replayingIndex, setReplayingIndex] = useState<number | null>(null);
-  const [transcribingIndex, setTranscribingIndex] = useState<number | null>(null);
+  const [transcribingIndex, setTranscribingIndex] = useState<number | null>(
+    null,
+  );
   const [transcripts, setTranscripts] = useState<Record<number, string>>({});
-  const [whisperModel, setWhisperModel] = useState<WhisperModelInfo | null>(null);
+  const [whisperModel, setWhisperModel] = useState<WhisperModelInfo | null>(
+    null,
+  );
   const [sttPendingIndex, setSttPendingIndex] = useState<number | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [axStatus, setAxStatus] = useState("");
   const [latestTranscript, setLatestTranscript] = useState<string | null>(null);
   const [pasteBusy, setPasteBusy] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const refreshMicStatus = useCallback(() => {
     void invoke<string>("mic_permission_status").then(setMicStatus);
@@ -110,7 +121,9 @@ function App() {
   }, []);
 
   const refreshLatestTranscript = useCallback(() => {
-    void invoke<string | null>("get_latest_transcript").then(setLatestTranscript);
+    void invoke<string | null>("get_latest_transcript").then(
+      setLatestTranscript,
+    );
   }, []);
 
   useEffect(() => {
@@ -123,21 +136,28 @@ function App() {
 
   const updateVadThreshold = useCallback(async (vadRmsThreshold: number) => {
     try {
-      const next = await invoke<AppSettings>("update_app_settings", { vadRmsThreshold });
+      const next = await invoke<AppSettings>("update_app_settings", {
+        vadRmsThreshold,
+      });
       setAppSettings(next);
     } catch (e) {
       setError(String(e));
     }
   }, []);
 
-  const updateWhisperLanguage = useCallback(async (whisperLanguage: WhisperLanguage) => {
-    try {
-      const next = await invoke<AppSettings>("update_app_settings", { whisperLanguage });
-      setAppSettings(next);
-    } catch (e) {
-      setError(String(e));
-    }
-  }, []);
+  const updateWhisperLanguage = useCallback(
+    async (whisperLanguage: WhisperLanguage) => {
+      try {
+        const next = await invoke<AppSettings>("update_app_settings", {
+          whisperLanguage,
+        });
+        setAppSettings(next);
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [],
+  );
 
   const loadDevices = useCallback(async () => {
     try {
@@ -169,42 +189,60 @@ function App() {
     let unlistenPasteDone: UnlistenFn | undefined;
 
     void (async () => {
-      unlistenLevel = await listen<AudioLevelPayload>("audio-level", (event) => {
-        setLevel(event.payload.level);
-      });
+      unlistenLevel = await listen<AudioLevelPayload>(
+        "audio-level",
+        (event) => {
+          setLevel(event.payload.level);
+        },
+      );
       if (cancelled) {
         await unlistenLevel();
         return;
       }
 
-      unlistenSegment = await listen<AudioSegmentPayload>("audio-segment", (event) => {
-        setLastSegment(event.payload);
-        setSegmentCount(event.payload.index + 1);
-        setSttPendingIndex(event.payload.index);
-      });
+      unlistenSegment = await listen<AudioSegmentPayload>(
+        "audio-segment",
+        (event) => {
+          setLastSegment(event.payload);
+          setSegmentCount(event.payload.index + 1);
+          setSttPendingIndex(event.payload.index);
+        },
+      );
       if (cancelled) {
         await unlistenSegment();
         return;
       }
 
-      unlistenTranscript = await listen<TranscriptReadyPayload>("transcript-ready", (event) => {
-        const { segmentIndex, text } = event.payload;
-        setTranscripts((prev) => ({ ...prev, [segmentIndex]: text }));
-        setLatestTranscript(text.trim() || null);
-        setSttPendingIndex((pending) => (pending === segmentIndex ? null : pending));
-        void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
-      });
+      unlistenTranscript = await listen<TranscriptReadyPayload>(
+        "transcript-ready",
+        (event) => {
+          const { segmentIndex, text } = event.payload;
+          setTranscripts((prev) => ({ ...prev, [segmentIndex]: text }));
+          setLatestTranscript(text.trim() || null);
+          setSttPendingIndex((pending) =>
+            pending === segmentIndex ? null : pending,
+          );
+          void invoke<WhisperModelInfo>("whisper_model_info").then(
+            setWhisperModel,
+          );
+        },
+      );
       if (cancelled) {
         await unlistenTranscript();
         return;
       }
 
-      unlistenTranscriptErr = await listen<TranscriptErrorPayload>("transcript-error", (event) => {
-        setError(`STT #${event.payload.segmentIndex + 1}: ${event.payload.message}`);
-        setSttPendingIndex((pending) =>
-          pending === event.payload.segmentIndex ? null : pending,
-        );
-      });
+      unlistenTranscriptErr = await listen<TranscriptErrorPayload>(
+        "transcript-error",
+        (event) => {
+          setError(
+            `STT #${event.payload.segmentIndex + 1}: ${event.payload.message}`,
+          );
+          setSttPendingIndex((pending) =>
+            pending === event.payload.segmentIndex ? null : pending,
+          );
+        },
+      );
       if (cancelled) {
         await unlistenTranscriptErr();
         return;
@@ -298,7 +336,9 @@ function App() {
       await invoke("stop_audio_monitor");
       setMonitoring(false);
       setLevel(0);
-      const list = await invoke<SessionSegmentSummary[]>("list_session_segments");
+      const list = await invoke<SessionSegmentSummary[]>(
+        "list_session_segments",
+      );
       setSessionSegments(list);
     } catch (e) {
       setError(String(e));
@@ -309,8 +349,14 @@ function App() {
     setError(null);
     setTranscribingIndex(index);
     try {
-      const result = await invoke<TranscriptResult>("transcribe_session_segment", { index });
-      setTranscripts((prev) => ({ ...prev, [result.segmentIndex]: result.text }));
+      const result = await invoke<TranscriptResult>(
+        "transcribe_session_segment",
+        { index },
+      );
+      setTranscripts((prev) => ({
+        ...prev,
+        [result.segmentIndex]: result.text,
+      }));
       void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
     } catch (e) {
       setError(String(e));
@@ -355,7 +401,12 @@ function App() {
           <AlertDescription className="space-y-2">
             {micStatus === "denied" &&
               "Enable Cursor/Terminal or this app in System Settings → Privacy → Microphone."}
-            <Button type="button" variant="secondary" size="sm" onClick={openSettings}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={openSettings}
+            >
               Open microphone settings
             </Button>
           </AlertDescription>
@@ -367,7 +418,12 @@ function App() {
           <AlertTitle>Accessibility: {axStatus || "…"}</AlertTitle>
           <AlertDescription className="space-y-2">
             Required to paste into TextEdit, Notes, Cursor, etc.
-            <Button type="button" variant="secondary" size="sm" onClick={openAxSettings}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={openAxSettings}
+            >
               Open accessibility settings
             </Button>
           </AlertDescription>
@@ -382,6 +438,32 @@ function App() {
           </AlertDescription>
         </Alert>
       )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Appearance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="theme-mode">Theme</Label>
+            <Select
+              value={theme}
+              onValueChange={(v) => {
+                if (v) setTheme(v as ThemeMode);
+              }}
+            >
+              <SelectTrigger id="theme-mode" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="system">System</SelectItem>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">
@@ -484,7 +566,9 @@ function App() {
               <Label htmlFor="whisper-lang">Whisper language</Label>
               <Select
                 value={appSettings.whisperLanguage}
-                onValueChange={(v) => void updateWhisperLanguage(v as WhisperLanguage)}
+                onValueChange={(v) =>
+                  void updateWhisperLanguage(v as WhisperLanguage)
+                }
               >
                 <SelectTrigger id="whisper-lang" className="w-full">
                   <SelectValue />
@@ -525,7 +609,8 @@ function App() {
 
       {info && (
         <p className="text-muted-foreground text-center text-xs">
-          {info.deviceName} · {info.sampleRate} Hz · {info.channels} ch · {info.sampleFormat}
+          {info.deviceName} · {info.sampleRate} Hz · {info.channels} ch ·{" "}
+          {info.sampleFormat}
         </p>
       )}
 
@@ -535,14 +620,12 @@ function App() {
             <CardTitle className="text-base">Live transcript</CardTitle>
             <CardDescription>
               Segments: {segmentCount}
-              {sttPendingIndex !== null && transcripts[sttPendingIndex] === undefined && (
-                <> · transcribing #{sttPendingIndex + 1}…</>
-              )}
+              {sttPendingIndex !== null &&
+                transcripts[sttPendingIndex] === undefined && (
+                  <> · transcribing #{sttPendingIndex + 1}…</>
+                )}
               {lastSegment && (
-                <>
-                  {" "}
-                  · last {lastSegment.durationSecs.toFixed(2)} s
-                </>
+                <> · last {lastSegment.durationSecs.toFixed(2)} s</>
               )}
             </CardDescription>
           </CardHeader>
@@ -553,7 +636,10 @@ function App() {
                 .sort((a, b) => a.index - b.index)
                 .map((row) => (
                   <p key={row.index} className="text-sm leading-snug">
-                    <span className="text-muted-foreground">#{row.index + 1}</span> {row.text}
+                    <span className="text-muted-foreground">
+                      #{row.index + 1}
+                    </span>{" "}
+                    {row.text}
                   </p>
                 ))}
             </CardContent>
@@ -564,8 +650,12 @@ function App() {
       {!monitoring && sessionSegments.length > 0 && (
         <Card aria-label="Session segments">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Session segments (debug)</CardTitle>
-            <CardDescription>16 kHz · replay / manual transcribe</CardDescription>
+            <CardTitle className="text-base">
+              Session segments (debug)
+            </CardTitle>
+            <CardDescription>
+              16 kHz · replay / manual transcribe
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {sessionSegments.map((seg) => (
@@ -579,7 +669,9 @@ function App() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={replayingIndex !== null || transcribingIndex !== null}
+                      disabled={
+                        replayingIndex !== null || transcribingIndex !== null
+                      }
                       onClick={() => void replaySegment(seg.index)}
                     >
                       {replayingIndex === seg.index ? "Playing…" : "Replay"}
@@ -600,7 +692,9 @@ function App() {
                   </div>
                 </div>
                 {transcripts[seg.index] && (
-                  <p className="text-muted-foreground text-sm">{transcripts[seg.index]}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {transcripts[seg.index]}
+                  </p>
                 )}
                 {seg.index < sessionSegments.length - 1 && <Separator />}
               </div>
