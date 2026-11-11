@@ -251,7 +251,7 @@ Persisted file (macOS):
 
 - **macOS-first** — primary development and testing target.
 - **Default STT model** is **base**; tiny/small ship in tagged releases or via `pnpm download-all-models`.
-- **Global shortcuts** while monitoring depend on OS shortcut registration; conflicts with other apps are possible.
+- **Global shortcuts** while monitoring depend on OS shortcut registration; conflicts with other apps are possible. Two running copies both receive the shortcut and race on the clipboard (`NSPasteboard` write fails in one of them). Quit the extra instance.
 - Very quiet mics may still need physical gain despite peak normalization.
 
 ---
