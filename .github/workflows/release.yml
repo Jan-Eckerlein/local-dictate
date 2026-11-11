@@ -20,6 +20,10 @@ jobs:
     env:
       CI: true
       MACOSX_DEPLOYMENT_TARGET: "11.0"
+      CMAKE_OSX_DEPLOYMENT_TARGET: "11.0"
+      CFLAGS: -mmacosx-version-min=11.0
+      CXXFLAGS: -mmacosx-version-min=11.0
+      RUSTFLAGS: -C link-arg=-mmacosx-version-min=11.0
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -31,6 +35,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: macos11-metal
       - run: pnpm install --frozen-lockfile
       - run: pnpm tauri build
       - name: Collect bundle paths
