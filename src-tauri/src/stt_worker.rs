@@ -1,5 +1,6 @@
 use crate::settings::SettingsState;
 use crate::stt::SttState;
+use crate::transcript_buffer::TranscriptBuffer;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
@@ -28,12 +29,18 @@ pub fn spawn_stt_worker(
     app: AppHandle,
     stt: Arc<SttState>,
     settings: SettingsState,
+    transcripts: TranscriptBuffer,
     rx: Receiver<SttJob>,
 ) {
     thread::spawn(move || {
         while let Ok(job) = rx.recv() {
             match stt.transcribe(&job.samples, &settings) {
                 Ok(text) => {
+                    transcripts.set_latest(text.clone());
+                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                    {
+                        let _ = crate::paste::copy_to_clipboard(&text);
+                    }
                     let payload = TranscriptReadyPayload {
                         segment_index: job.index,
                         text,

@@ -70,12 +70,12 @@ flowchart TB
 | STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json      |
 | Model size | `base` (default)                  | `pnpm download-model` / env; **UI selector at #14** (tiny/base/small, files on disk) |
 | VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                 |
-| Paste      | Clipboard + simulated ⌘V          | Accessibility permission likely required                                             |
+| Paste      | Clipboard + simulated ⌘V          | Global **⌘⇧V** + UI button; Accessibility required (macOS)                           |
 | UI         | Small window + meter              | Minimal HTML/CSS for milestones 4–9; **shadcn** + Tailwind at **#10**; tray deferred |
 
 **Open (pick during build):**
 
-- [ ] Shortcut scheme: one key vs record / paste split
+- [x] Shortcut scheme: **⌘⇧V** pastes latest transcript (monitoring via UI)
 - [ ] Assignment receipt date in README (deadline line)
 
 ---
@@ -95,7 +95,7 @@ Each step should compile or be an obvious WIP milestone.
 | 6   | `whisper-rs` + model download script                                | done                |
 | 7   | Auto STT pipeline: VAD segment → `mpsc` whisper worker → live transcript (no manual Transcribe) | done |
 | 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en) | done        |
-| 9   | Global shortcut + paste (TextEdit / Notes test)                     | todo                |
+| 9   | Global shortcut + paste (TextEdit / Notes test)                     | done                |
 | 10  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | todo                |
 | 11  | UI state machine + error / permission hints                         | todo                |
 | 12  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo                |

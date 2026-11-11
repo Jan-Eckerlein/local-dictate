@@ -1,20 +1,27 @@
 mod audio;
+mod macos_accessibility;
 mod macos_mic;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod paste;
 mod replay;
 mod segment;
 mod settings;
 mod stt;
 mod stt_worker;
+mod transcript_buffer;
 
 use audio::{list_input_devices, start_monitor, stop_monitor, AudioMonitorInfo, InputDeviceInfo};
 use segment::AudioSegmentPayload;
 use settings::{AppSettings, SettingsState, WhisperLanguage};
 use stt::{SttState, WhisperModelInfo};
 use stt_worker::{spawn_stt_worker, SttJob};
+use transcript_buffer::TranscriptBuffer;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
+
+pub const PASTE_SHORTCUT: &str = "CommandOrControl+Shift+V";
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +67,77 @@ fn mic_permission_status() -> String {
 #[tauri::command]
 fn open_microphone_settings() -> Result<(), String> {
     macos_mic::open_privacy_settings()
+}
+
+#[tauri::command]
+fn accessibility_permission_status() -> String {
+    macos_accessibility::authorization_status().to_string()
+}
+
+#[tauri::command]
+fn open_accessibility_settings() -> Result<(), String> {
+    macos_accessibility::open_privacy_settings()
+}
+
+#[tauri::command]
+fn get_latest_transcript(buffer: State<'_, TranscriptBuffer>) -> Result<Option<String>, String> {
+    buffer.latest()
+}
+
+#[tauri::command]
+fn paste_last_transcript(buffer: State<'_, TranscriptBuffer>) -> Result<(), String> {
+    macos_accessibility::ensure_trusted()?;
+    let text = buffer.take_for_paste()?;
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        paste::paste_text(&text)?;
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let _ = text;
+        return Err("paste not supported on this platform".into());
+    }
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn paste_from_shortcut(app: &tauri::AppHandle) {
+    let buffer = app.state::<TranscriptBuffer>();
+    match macos_accessibility::ensure_trusted() {
+        Ok(()) => {}
+        Err(message) => {
+            let _ = app.emit("paste-error", message);
+            return;
+        }
+    }
+    let text = match buffer.take_for_paste() {
+        Ok(t) => t,
+        Err(message) => {
+            let _ = app.emit("paste-error", message);
+            return;
+        }
+    };
+    match paste::paste_text(&text) {
+        Ok(()) => {
+            let _ = app.emit("paste-done", ());
+        }
+        Err(message) => {
+            let _ = app.emit("paste-error", message);
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn register_paste_shortcut(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+    app.global_shortcut()
+        .on_shortcut(PASTE_SHORTCUT, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                paste_from_shortcut(app);
+            }
+        })
+        .map_err(|e| format!("register paste shortcut: {e}"))
 }
 
 #[tauri::command]
@@ -118,6 +196,7 @@ fn transcribe_session_segment(
     state: State<'_, Mutex<AudioMonitorState>>,
     stt: State<'_, Arc<SttState>>,
     settings: State<'_, SettingsState>,
+    buffer: State<'_, TranscriptBuffer>,
 ) -> Result<TranscriptResult, String> {
     let guard = state
         .lock()
@@ -139,6 +218,7 @@ fn transcribe_session_segment(
     };
 
     let text = stt.transcribe(&samples, &settings)?;
+    buffer.set_latest(text.clone());
     Ok(TranscriptResult {
         segment_index: index,
         text,
@@ -235,30 +315,47 @@ fn stop_audio_monitor(state: State<'_, Mutex<AudioMonitorState>>) -> Result<(), 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+    }
+
+    builder
         .setup(|app| {
             let (tx, rx) = mpsc::channel::<SttJob>();
             let stt = Arc::new(SttState::new());
             let settings = SettingsState::load(app.handle())?;
+            let transcripts = TranscriptBuffer::default();
             spawn_stt_worker(
                 app.handle().clone(),
                 stt.clone(),
                 settings.clone(),
+                transcripts.clone(),
                 rx,
             );
             app.manage(stt);
             app.manage(settings);
+            app.manage(transcripts);
             app.manage(SttInbox { tx });
             app.manage(Mutex::new(AudioMonitorState::new()));
+
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            register_paste_shortcut(app.handle())?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             mic_permission_status,
             open_microphone_settings,
+            accessibility_permission_status,
+            open_accessibility_settings,
             list_input_audio_devices,
             get_app_settings,
             update_app_settings,
+            get_latest_transcript,
+            paste_last_transcript,
             list_session_segments,
             whisper_model_info,
             transcribe_session_segment,

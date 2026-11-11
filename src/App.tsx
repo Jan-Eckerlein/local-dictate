@@ -79,16 +79,29 @@ function App() {
   const [whisperModel, setWhisperModel] = useState<WhisperModelInfo | null>(null);
   const [sttPendingIndex, setSttPendingIndex] = useState<number | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [axStatus, setAxStatus] = useState("");
+  const [latestTranscript, setLatestTranscript] = useState<string | null>(null);
+  const [pasteBusy, setPasteBusy] = useState(false);
 
   const refreshMicStatus = useCallback(() => {
     void invoke<string>("mic_permission_status").then(setMicStatus);
   }, []);
 
+  const refreshAxStatus = useCallback(() => {
+    void invoke<string>("accessibility_permission_status").then(setAxStatus);
+  }, []);
+
+  const refreshLatestTranscript = useCallback(() => {
+    void invoke<string | null>("get_latest_transcript").then(setLatestTranscript);
+  }, []);
+
   useEffect(() => {
     refreshMicStatus();
+    refreshAxStatus();
+    refreshLatestTranscript();
     void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
     void invoke<AppSettings>("get_app_settings").then(setAppSettings);
-  }, [refreshMicStatus]);
+  }, [refreshMicStatus, refreshAxStatus, refreshLatestTranscript]);
 
   const updateVadThreshold = useCallback(async (vadRmsThreshold: number) => {
     try {
@@ -134,6 +147,8 @@ function App() {
     let unlistenSegment: UnlistenFn | undefined;
     let unlistenTranscript: UnlistenFn | undefined;
     let unlistenTranscriptErr: UnlistenFn | undefined;
+    let unlistenPasteErr: UnlistenFn | undefined;
+    let unlistenPasteDone: UnlistenFn | undefined;
 
     void (async () => {
       unlistenLevel = await listen<AudioLevelPayload>("audio-level", (event) => {
@@ -157,6 +172,7 @@ function App() {
       unlistenTranscript = await listen<TranscriptReadyPayload>("transcript-ready", (event) => {
         const { segmentIndex, text } = event.payload;
         setTranscripts((prev) => ({ ...prev, [segmentIndex]: text }));
+        setLatestTranscript(text.trim() || null);
         setSttPendingIndex((pending) => (pending === segmentIndex ? null : pending));
         void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
       });
@@ -173,6 +189,22 @@ function App() {
       });
       if (cancelled) {
         await unlistenTranscriptErr();
+        return;
+      }
+
+      unlistenPasteErr = await listen<string>("paste-error", (event) => {
+        setError(event.payload);
+      });
+      if (cancelled) {
+        await unlistenPasteErr();
+        return;
+      }
+
+      unlistenPasteDone = await listen("paste-done", () => {
+        setError(null);
+      });
+      if (cancelled) {
+        await unlistenPasteDone();
       }
     })();
 
@@ -182,14 +214,35 @@ function App() {
       void unlistenSegment?.();
       void unlistenTranscript?.();
       void unlistenTranscriptErr?.();
+      void unlistenPasteErr?.();
+      void unlistenPasteDone?.();
     };
   }, []);
 
   const micAuthorized = micStatus === "authorized";
+  const axAuthorized = axStatus === "authorized";
 
   const openSettings = useCallback(() => {
     void invoke("open_microphone_settings").then(refreshMicStatus);
   }, [refreshMicStatus]);
+
+  const openAxSettings = useCallback(() => {
+    void invoke("open_accessibility_settings").then(refreshAxStatus);
+  }, [refreshAxStatus]);
+
+  const pasteLast = useCallback(async () => {
+    setError(null);
+    setPasteBusy(true);
+    try {
+      await invoke("paste_last_transcript");
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPasteBusy(false);
+      refreshAxStatus();
+    }
+  }, [refreshAxStatus]);
 
   const start = useCallback(async () => {
     setError(null);
@@ -256,7 +309,9 @@ function App() {
   return (
     <main className="container">
       <h1>local-dictate</h1>
-      <p className="subtitle">VAD → local Whisper (auto while monitoring)</p>
+      <p className="subtitle">
+        VAD → local Whisper · new segments copy to clipboard · ⌘⇧V pastes into focused app
+      </p>
 
       {!micAuthorized && (
         <div className="permission-block">
@@ -269,6 +324,33 @@ function App() {
           </button>
         </div>
       )}
+
+      {!axAuthorized && (
+        <div className="permission-block">
+          <p className="hint">
+            Accessibility: <strong>{axStatus || "…"}</strong>
+            {axStatus === "denied" &&
+              " — required to paste into TextEdit, Notes, etc. Enable local-dictate in Accessibility."}
+          </p>
+          <button type="button" onClick={openAxSettings}>
+            Open accessibility settings
+          </button>
+        </div>
+      )}
+
+      <section className="paste-block" aria-label="Paste last transcript">
+        <p className="hint">
+          Latest transcript:{" "}
+          <strong>{latestTranscript ? latestTranscript.slice(0, 120) : "none yet"}</strong>
+        </p>
+        <button
+          type="button"
+          disabled={pasteBusy || !latestTranscript}
+          onClick={() => void pasteLast()}
+        >
+          {pasteBusy ? "Pasting…" : "Paste latest (⌘⇧V) — or ⌘V after a new transcript"}
+        </button>
+      </section>
 
       {devices.length > 0 && (
         <label className="device-select">
