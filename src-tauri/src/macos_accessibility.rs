@@ -2,9 +2,59 @@
 
 #[cfg(target_os = "macos")]
 mod ffi {
+    use core_foundation::dictionary::CFDictionaryRef;
+    use core_foundation::string::CFStringRef;
+
     #[link(name = "ApplicationServices", kind = "framework")]
     unsafe extern "C" {
         pub fn AXIsProcessTrusted() -> bool;
+        pub fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
+        pub static kAXTrustedCheckOptionPrompt: CFStringRef;
+    }
+
+    #[link(name = "System")]
+    unsafe extern "C" {
+        fn pthread_main_np() -> i32;
+        fn dispatch_get_main_queue() -> *mut std::ffi::c_void;
+        fn dispatch_sync_f(
+            queue: *mut std::ffi::c_void,
+            context: *mut std::ffi::c_void,
+            work: extern "C" fn(*mut std::ffi::c_void),
+        );
+    }
+
+    /// System dialog that opens Privacy → Accessibility. Not an Allow/Deny grant.
+    pub fn prompt_if_untrusted() {
+        if unsafe { AXIsProcessTrusted() } {
+            return;
+        }
+        if unsafe { pthread_main_np() } != 0 {
+            show_prompt();
+            return;
+        }
+        unsafe {
+            dispatch_sync_f(
+                dispatch_get_main_queue(),
+                std::ptr::null_mut(),
+                show_prompt_on_main,
+            );
+        }
+    }
+
+    extern "C" fn show_prompt_on_main(_: *mut std::ffi::c_void) {
+        show_prompt();
+    }
+
+    fn show_prompt() {
+        use core_foundation::base::TCFType;
+        use core_foundation::boolean::CFBoolean;
+        use core_foundation::dictionary::CFDictionary;
+        use core_foundation::string::CFString;
+
+        let key = unsafe { CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt) };
+        let value = CFBoolean::true_value();
+        let options = CFDictionary::from_CFType_pairs(&[(key, value)]);
+        unsafe { AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) };
     }
 }
 
@@ -35,6 +85,18 @@ pub fn ensure_trusted() -> Result<(), String> {
 
 #[cfg(not(target_os = "macos"))]
 pub fn ensure_trusted() -> Result<(), String> {
+    Ok(())
+}
+
+/// Show the system Accessibility prompt when this process is not trusted yet.
+#[cfg(target_os = "macos")]
+pub fn request_access_if_needed() -> Result<(), String> {
+    ffi::prompt_if_untrusted();
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_access_if_needed() -> Result<(), String> {
     Ok(())
 }
 

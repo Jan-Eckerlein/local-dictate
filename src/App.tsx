@@ -164,7 +164,19 @@ function App() {
     refreshLatestTranscript();
     refreshWhisperModel();
     void invoke<AppSettings>("get_app_settings").then(setAppSettings);
-    void invoke<string>("request_microphone_permission").then(setMicStatus);
+    // Mic dialog first. The Accessibility prompt is modal and would hide it.
+    void (async () => {
+      try {
+        setMicStatus(await invoke<string>("request_microphone_permission"));
+      } catch {
+        refreshMicStatus();
+      }
+      try {
+        setAxStatus(await invoke<string>("request_accessibility_permission"));
+      } catch {
+        refreshAxStatus();
+      }
+    })();
   }, [
     refreshMicStatus,
     refreshAxStatus,

@@ -85,6 +85,12 @@ fn accessibility_permission_status() -> String {
 }
 
 #[tauri::command]
+fn request_accessibility_permission() -> Result<String, String> {
+    macos_accessibility::request_access_if_needed()?;
+    Ok(accessibility_permission_status())
+}
+
+#[tauri::command]
 fn open_accessibility_settings() -> Result<(), String> {
     macos_accessibility::open_privacy_settings()
 }
@@ -393,6 +399,7 @@ pub fn run() {
             request_microphone_permission,
             open_microphone_settings,
             accessibility_permission_status,
+            request_accessibility_permission,
             open_accessibility_settings,
             list_input_audio_devices,
             get_app_settings,

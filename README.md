@@ -43,7 +43,7 @@ pnpm download-model
 pnpm tauri dev
 ```
 
-**First run:** allow **Microphone** when prompted. For global paste into TextEdit, Notes, Cursor, etc., enable **Accessibility** for the app (or **Terminal** / **Cursor** when running `pnpm tauri dev`).
+**First run:** allow **Microphone** when prompted. macOS also shows the **Accessibility** prompt (it opens the privacy list — there is no Allow button). Enable the app there, or **Terminal** / **Cursor** when running `pnpm tauri dev`.
 
 ---
 
