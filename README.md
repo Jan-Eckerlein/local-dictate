@@ -112,7 +112,22 @@ pnpm download-model   # if not already done
 pnpm tauri build
 ```
 
-Artifacts land under `src-tauri/target/release/bundle/`. On a **fresh clone**, run `pnpm install`, download the model, and ensure Xcode CLI tools / Rust are installed before building.
+Artifacts land under `src-tauri/target/release/bundle/` (`.app` and `.dmg` on Apple Silicon).
+
+**macOS minimum:** 11.0 (set in `tauri.conf.json` and `src-tauri/.cargo/config.toml` so whisper.cpp can compile with C++17 `std::filesystem`).
+
+On a **fresh clone**, run `pnpm install`, download the model, and ensure Xcode CLI tools / Rust are installed before building. The Whisper **model is not bundled** in the CI artifact; install it separately after download.
+
+### CI
+
+GitHub Actions on every push/PR to `main`:
+
+| Job | Runner | What |
+| --- | --- | --- |
+| **Frontend** | `ubuntu-latest` | `pnpm build` (TypeScript + Vite) |
+| **macOS release** | `macos-latest` | `pnpm tauri build` (unsigned bundle; DMG/app uploaded as artifacts) |
+
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 

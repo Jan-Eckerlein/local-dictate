@@ -101,7 +101,7 @@ Each step should compile or be an obvious WIP milestone.
 | 12  | Tailwind + shadcn foundation (Button, Select, Alert, …)                                                                            | done                |
 | 13  | UI state machine + error / permission hints                                                                                        | done                |
 | 14  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md`                                                                | done                |
-| 15  | Release build (`pnpm tauri build`) + known limitations                                                                             | todo                |
+| 15  | Release build (`pnpm tauri build`) + known limitations                                                                             | done                |
 | 16  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | todo                |
 
 ### Milestone #10 notes (VAD pre-roll)
@@ -109,6 +109,13 @@ Each step should compile or be an obvious WIP milestone.
 - Constants in `segment.rs`: `VAD_PREROLL_MS`, `VAD_SPEECH_ONSET_FRAMES`.
 - Ring buffer while monitoring; prepend on confirmed onset (fewer clipped first words).
 - Re-test: “test eins zwei drei …” vs. replay / manual transcribe.
+
+### Milestone #15 notes (release + CI)
+
+- `src-tauri/.cargo/config.toml`: `MACOSX_DEPLOYMENT_TARGET=11.0` (whisper.cpp compile).
+- `tauri.conf.json` `minimumSystemVersion`: `11.0`.
+- `.github/workflows/ci.yml`: Ubuntu frontend build + macOS `pnpm tauri build`, bundle artifacts.
+- CI bundles are **unsigned**; Whisper model still via `pnpm download-model` locally.
 
 ### Milestone #14 notes (README)
 
@@ -156,7 +163,7 @@ Not “prettier UI” alone — **#6** proved Whisper works; **#7** wires produc
 - [ ] Speak → silence → local transcript (no cloud)
 - [ ] Global shortcut inserts into **another** app (e.g. TextEdit)
 - [ ] Explain: sample rate, buffers, VAD constants, ownership of audio buffer, paste path
-- [ ] `cargo check` / `pnpm tauri build` clean on a fresh clone (with model download steps)
+- [x] `cargo check` / `pnpm tauri build` clean on a fresh clone (with model download steps) — CI macOS job + local verify
 
 ---
 

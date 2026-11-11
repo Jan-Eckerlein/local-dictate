@@ -1,0 +1,3 @@
+# whisper.cpp (via whisper-rs-sys) uses C++17 std::filesystem — requires macOS 10.15+
+[env]
+MACOSX_DEPLOYMENT_TARGET = "11.0"
