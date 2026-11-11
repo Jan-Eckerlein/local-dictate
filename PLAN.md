@@ -75,7 +75,7 @@ flowchart TB
 
 **Open (pick during build):**
 
-- [x] Paste shortcuts: **⌘⇧V** last segment · **⌘⇧B** since last batch · **⌘⇧A** all (monitoring via UI)
+- [x] Paste shortcuts: **⌘⇧V** last segment · **⌘⇧B** since last paste (any of the three moves the cursor) · **⌘⇧A** all (monitoring via UI)
 - [ ] Assignment receipt date in README (deadline line)
 
 ---

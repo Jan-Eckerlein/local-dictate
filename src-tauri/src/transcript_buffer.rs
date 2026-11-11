@@ -14,7 +14,7 @@ pub enum PasteScope {
 #[derive(Clone, Default)]
 pub struct TranscriptBuffer {
     segments: Arc<Mutex<BTreeMap<usize, String>>>,
-    /// Inclusive upper bound of segment indices already covered by a "since last copy" paste.
+    /// Inclusive upper bound already covered by any explicit paste (⌘⇧V, ⌘⇧B, or ⌘⇧A).
     copied_through_index: Arc<Mutex<Option<usize>>>,
 }
 
@@ -75,7 +75,9 @@ impl TranscriptBuffer {
                     .map(|(_, t)| t)
                     .collect();
                 if pending.is_empty() {
-                    return Err("no new segments since last batch paste (⌘⇧B)".into());
+                    return Err(
+                        "no new segments since last paste (⌘⇧V, ⌘⇧B, or ⌘⇧A)".into(),
+                    );
                 }
                 join_lines(pending)
             }
@@ -97,29 +99,70 @@ impl TranscriptBuffer {
             .lock()
             .map_err(|_| "transcript buffer lock poisoned".to_string())?;
 
-        match scope {
-            PasteScope::LastSegment => {}
+        let advanced = match scope {
+            // Last and all both end on the newest segment, so the next batch starts after it.
+            PasteScope::LastSegment | PasteScope::All => guard.keys().next_back().copied(),
             PasteScope::SinceLastCopy => {
                 let prev = *through;
-                let max_included = guard
+                guard
                     .keys()
                     .filter(|index| match prev {
                         None => true,
                         Some(last) => **index > last,
                     })
                     .max()
-                    .copied();
-                if let Some(max) = max_included {
-                    *through = Some(max);
-                }
+                    .copied()
             }
-            PasteScope::All => {
-                if let Some(max) = guard.keys().next_back() {
-                    *through = Some(*max);
-                }
-            }
+        };
+        if let Some(max) = advanced {
+            *through = Some(match *through {
+                Some(prev) => prev.max(max),
+                None => max,
+            });
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn buffer_with(texts: &[&str]) -> TranscriptBuffer {
+        let buf = TranscriptBuffer::default();
+        for (index, text) in texts.iter().enumerate() {
+            buf.record_segment(index, (*text).to_string());
+        }
+        buf
+    }
+
+    #[test]
+    fn last_paste_moves_batch_start() {
+        let buf = buffer_with(&["a", "b"]);
+        buf.commit_copy(PasteScope::SinceLastCopy).unwrap();
+
+        buf.record_segment(2, "c".into());
+        buf.record_segment(3, "d".into());
+        buf.commit_copy(PasteScope::LastSegment).unwrap();
+
+        buf.record_segment(4, "e".into());
+        assert_eq!(
+            buf.text_for_paste(PasteScope::SinceLastCopy).unwrap(),
+            "e"
+        );
+    }
+
+    #[test]
+    fn all_paste_moves_batch_start() {
+        let buf = buffer_with(&["a", "b", "c"]);
+        buf.commit_copy(PasteScope::All).unwrap();
+        assert!(buf.text_for_paste(PasteScope::SinceLastCopy).is_err());
+
+        buf.record_segment(3, "d".into());
+        assert_eq!(
+            buf.text_for_paste(PasteScope::SinceLastCopy).unwrap(),
+            "d"
+        );
     }
 }
 

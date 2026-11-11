@@ -87,7 +87,7 @@ pnpm tauri dev
 | Shortcut | Action |
 | --- | --- |
 | **⌘⇧V** | Paste the **last** transcribed segment |
-| **⌘⇧B** | Paste **new** segments since the last batch paste (no-op → info toast if nothing new) |
+| **⌘⇧B** | Paste **new** segments since the last paste. ⌘⇧V, ⌘⇧B, and ⌘⇧A all move that start point (no-op → info toast if nothing new) |
 | **⌘⇧A** | Paste **all** segments in the session (newline-separated) |
 
 Paste requires **Accessibility** (trusted process + synthetic ⌘V). Without it, use the text already on the clipboard after each segment completes.

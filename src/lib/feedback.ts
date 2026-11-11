@@ -7,7 +7,7 @@ export interface UserFeedback {
 
 function isPasteInfoMessage(message: string): boolean {
   const lower = message.toLowerCase();
-  return lower.includes("no new segments since last batch paste");
+  return lower.includes("no new segments since last paste");
 }
 
 function isPermissionErrorMessage(message: string): boolean {
