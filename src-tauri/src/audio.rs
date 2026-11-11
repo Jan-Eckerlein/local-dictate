@@ -1,7 +1,11 @@
+use crate::segment::{
+    interleaved_to_mono, resample_linear, AudioSegmentPayload, VadProcessor, WHISPER_SAMPLE_RATE,
+};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, StreamConfig};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::{Arc, Mutex as StdMutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -152,6 +156,7 @@ pub fn start_monitor(
     app: AppHandle,
     stop: Arc<AtomicBool>,
     device_name: Option<String>,
+    session_segments: Arc<StdMutex<Vec<Vec<f32>>>>,
 ) -> Result<AudioMonitorInfo, String> {
     let host = cpal::default_host();
     let device = resolve_input_device(&host, device_name.as_deref())?;
@@ -176,6 +181,9 @@ pub fn start_monitor(
 
     let level = Arc::new(SharedLevel::new());
 
+    let (chunk_tx, chunk_rx) = mpsc::channel::<Vec<f32>>();
+    let chunk_tx = Arc::new(StdMutex::new(Some(chunk_tx)));
+
     let stop_emit = stop.clone();
     let level_emit = level.clone();
     let app_emit = app.clone();
@@ -186,6 +194,30 @@ pub fn start_monitor(
         }
     });
 
+    let stop_vad = stop.clone();
+    let app_vad = app.clone();
+    let segments_store = session_segments;
+    thread::spawn(move || {
+        let mut vad = VadProcessor::new();
+        while !stop_vad.load(Ordering::Relaxed) {
+            match chunk_rx.recv_timeout(Duration::from_millis(50)) {
+                Ok(chunk) => {
+                    let resampled = resample_linear(&chunk, sample_rate, WHISPER_SAMPLE_RATE);
+                    for seg in vad.push_resampled(&resampled) {
+                        if let Ok(mut guard) = segments_store.lock() {
+                            guard.push(seg.clone());
+                        }
+                        let payload = AudioSegmentPayload::from_segment(&seg);
+                        let _ = app_vad.emit("audio-segment", payload);
+                        // Milestone 6+: hand `seg` to whisper worker via mpsc.
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+    });
+
     let stop_capture = stop.clone();
     let level_capture = level;
     let ch = channels as usize;
@@ -193,12 +225,22 @@ pub fn start_monitor(
     thread::spawn(move || {
         let err_fn = |err| eprintln!("audio stream error: {err}");
 
+        let level_f32 = level_capture.clone();
+        let level_i16 = level_capture;
+        let chunk_tx_f32 = chunk_tx.clone();
+        let chunk_tx_i16 = chunk_tx.clone();
         let stream = match sample_format {
             SampleFormat::F32 => device.build_input_stream(
                 &stream_config,
                 move |data: &[f32], _| {
                     let (rms, peak) = rms_and_peak_f32(data, ch);
-                    level_capture.store(rms, peak);
+                    level_f32.store(rms, peak);
+                    let mono = interleaved_to_mono(data, ch);
+                    if let Ok(guard) = chunk_tx_f32.lock() {
+                        if let Some(tx) = guard.as_ref() {
+                            let _ = tx.send(mono);
+                        }
+                    }
                 },
                 err_fn,
                 None,
@@ -208,7 +250,13 @@ pub fn start_monitor(
                 move |data: &[i16], _| {
                     let buf = samples_to_f32_i16(data);
                     let (rms, peak) = rms_and_peak_f32(&buf, ch);
-                    level_capture.store(rms, peak);
+                    level_i16.store(rms, peak);
+                    let mono = interleaved_to_mono(&buf, ch);
+                    if let Ok(guard) = chunk_tx_i16.lock() {
+                        if let Some(tx) = guard.as_ref() {
+                            let _ = tx.send(mono);
+                        }
+                    }
                 },
                 err_fn,
                 None,
@@ -230,6 +278,9 @@ pub fn start_monitor(
 
         wait_while_running(&stop_capture);
         drop(stream);
+        if let Ok(mut guard) = chunk_tx.lock() {
+            *guard = None;
+        }
     });
 
     Ok(info)

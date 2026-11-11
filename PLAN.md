@@ -69,9 +69,9 @@ flowchart TB
 | Platform | macOS | Windows documented as untested unless time allows |
 | STT | `whisper-rs` + ggml on disk | Model **not** in git; download script |
 | Model size | `base` (default) | `small` as optional upgrade in README |
-| VAD | RMS + silence hang + max duration | Constants documented in README |
+| VAD | RMS + silence hang + max duration | Default RMS **0.008** in code; user threshold at **#8** (see milestones) |
 | Paste | Clipboard + simulated ⌘V | Accessibility permission likely required |
-| UI | Small window + meter | Minimal HTML/CSS for milestones 4–7; **shadcn** + Tailwind at **#8**; tray deferred |
+| UI | Small window + meter | Minimal HTML/CSS for milestones 4–9; **shadcn** + Tailwind at **#10**; tray deferred |
 
 **Open (pick during build):**
 
@@ -90,14 +90,16 @@ Each step should compile or be an obvious WIP milestone.
 | 1 | Tauri 2 + React + dev/build working | done |
 | 2 | `cpal` capture + RMS → UI level meter | done |
 | 3 | `cpal` input device list + UI selector (avoid wrong default mic) | done |
-| 4 | Resample 16 kHz mono + silence segmentation | todo |
-| 5 | `whisper-rs` + model download script | todo |
-| 6 | End-to-end: silence → transcript in app state | todo |
-| 7 | Global shortcut + paste (TextEdit / Notes test) | todo |
-| 8 | Tailwind + shadcn foundation (Button, Select, Alert, …) | todo |
-| 9 | UI state machine + error / permission hints | todo |
-| 10 | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo |
-| 11 | Release build (`pnpm tauri build`) + known limitations | todo |
+| 4 | Resample 16 kHz mono + silence segmentation | done |
+| 5 | Debug: session segment buffer + cpal replay after stop | done |
+| 6 | `whisper-rs` + model download script | todo |
+| 7 | End-to-end: silence → transcript in app state | todo |
+| 8 | User setting: VAD RMS threshold (persist; optional hang later) | todo |
+| 9 | Global shortcut + paste (TextEdit / Notes test) | todo |
+| 10 | Tailwind + shadcn foundation (Button, Select, Alert, …) | todo |
+| 11 | UI state machine + error / permission hints | todo |
+| 12 | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo |
+| 13 | Release build (`pnpm tauri build`) + known limitations | todo |
 
 ---
 

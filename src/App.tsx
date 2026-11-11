@@ -20,6 +20,19 @@ interface InputDeviceInfo {
   isDefault: boolean;
 }
 
+interface AudioSegmentPayload {
+  sampleRate: number;
+  sampleCount: number;
+  durationSecs: number;
+}
+
+interface SessionSegmentSummary {
+  index: number;
+  sampleRate: number;
+  sampleCount: number;
+  durationSecs: number;
+}
+
 function App() {
   const [monitoring, setMonitoring] = useState(false);
   const [level, setLevel] = useState(0);
@@ -28,6 +41,10 @@ function App() {
   const [micStatus, setMicStatus] = useState("");
   const [devices, setDevices] = useState<InputDeviceInfo[]>([]);
   const [selectedDevice, setSelectedDevice] = useState("");
+  const [lastSegment, setLastSegment] = useState<AudioSegmentPayload | null>(null);
+  const [segmentCount, setSegmentCount] = useState(0);
+  const [sessionSegments, setSessionSegments] = useState<SessionSegmentSummary[]>([]);
+  const [replayingIndex, setReplayingIndex] = useState<number | null>(null);
 
   const refreshMicStatus = useCallback(() => {
     void invoke<string>("mic_permission_status").then(setMicStatus);
@@ -58,16 +75,25 @@ function App() {
   }, [micStatus, loadDevices]);
 
   useEffect(() => {
-    let unlisten: UnlistenFn | undefined;
+    let unlistenLevel: UnlistenFn | undefined;
+    let unlistenSegment: UnlistenFn | undefined;
 
     listen<AudioLevelPayload>("audio-level", (event) => {
       setLevel(event.payload.level);
     }).then((fn) => {
-      unlisten = fn;
+      unlistenLevel = fn;
+    });
+
+    listen<AudioSegmentPayload>("audio-segment", (event) => {
+      setLastSegment(event.payload);
+      setSegmentCount((n) => n + 1);
+    }).then((fn) => {
+      unlistenSegment = fn;
     });
 
     return () => {
-      void unlisten?.();
+      void unlistenLevel?.();
+      void unlistenSegment?.();
     };
   }, []);
 
@@ -84,6 +110,9 @@ function App() {
         deviceName: selectedDevice || null,
       });
       setInfo(deviceInfo);
+      setLastSegment(null);
+      setSegmentCount(0);
+      setSessionSegments([]);
       setMonitoring(true);
       refreshMicStatus();
     } catch (e) {
@@ -94,9 +123,28 @@ function App() {
   }, [refreshMicStatus, selectedDevice]);
 
   const stop = useCallback(async () => {
-    await invoke("stop_audio_monitor");
-    setMonitoring(false);
-    setLevel(0);
+    setError(null);
+    try {
+      await invoke("stop_audio_monitor");
+      setMonitoring(false);
+      setLevel(0);
+      const list = await invoke<SessionSegmentSummary[]>("list_session_segments");
+      setSessionSegments(list);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  const replaySegment = useCallback(async (index: number) => {
+    setError(null);
+    setReplayingIndex(index);
+    try {
+      await invoke("replay_session_segment", { index });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setReplayingIndex(null);
+    }
   }, []);
 
   const pct = Math.round(Math.min(1, level) * 100);
@@ -104,7 +152,7 @@ function App() {
   return (
     <main className="container">
       <h1>local-dictate</h1>
-      <p className="subtitle">Microphone level (cpal)</p>
+      <p className="subtitle">Microphone level + VAD segments (16 kHz)</p>
 
       {!micAuthorized && (
         <div className="permission-block">
@@ -159,6 +207,41 @@ function App() {
           <br />
           {info.sampleRate} Hz · {info.channels} ch · {info.sampleFormat}
         </p>
+      )}
+
+      {monitoring && (
+        <p className="segment-info">
+          Segments: {segmentCount}
+          {lastSegment && (
+            <>
+              <br />
+              Last: {lastSegment.durationSecs.toFixed(2)} s · {lastSegment.sampleCount} samples @{" "}
+              {lastSegment.sampleRate} Hz
+            </>
+          )}
+        </p>
+      )}
+
+      {!monitoring && sessionSegments.length > 0 && (
+        <section className="segment-replay" aria-label="Session segments">
+          <p className="segment-replay-title">Session segments (16 kHz)</p>
+          <ul className="segment-list">
+            {sessionSegments.map((seg) => (
+              <li key={seg.index}>
+                <span className="segment-list-label">
+                  #{seg.index + 1} — {seg.durationSecs.toFixed(2)} s
+                </span>
+                <button
+                  type="button"
+                  disabled={replayingIndex !== null}
+                  onClick={() => void replaySegment(seg.index)}
+                >
+                  {replayingIndex === seg.index ? "Playing…" : "Replay"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {error && <p className="error">{error}</p>}
