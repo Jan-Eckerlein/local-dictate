@@ -93,7 +93,7 @@ Each step should compile or be an obvious WIP milestone.
 | 4   | Resample 16 kHz mono + silence segmentation                         | done                |
 | 5   | cpal replay after stop                                              | done                |
 | 6   | `whisper-rs` + model download script                                | done                |
-| 7   | End-to-end: silence → transcript in app state                       | todo                |
+| 7   | Auto STT pipeline: VAD segment → `mpsc` whisper worker → live transcript (no manual Transcribe) | todo |
 | 8   | User settings (persist): VAD RMS threshold; Whisper language (auto / de / en) | todo        |
 | 9   | Global shortcut + paste (TextEdit / Notes test)                     | todo                |
 | 10  | Tailwind + shadcn foundation (Button, Select, Alert, …)             | todo                |
@@ -101,9 +101,10 @@ Each step should compile or be an obvious WIP milestone.
 | 12  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md` | todo                |
 | 13  | Release build (`pnpm tauri build`) + known limitations              | todo                |
 
-### Milestone #7 notes (E2E STT)
+### Milestone #7 notes (auto STT pipeline)
 
-- Wire VAD segments → **`mpsc`** → Whisper worker (never block cpal); emit transcript into app state / UI (replace manual **Transcribe** as primary path).
+Not “prettier UI” alone — **#6** proved Whisper works; **#7** wires production flow: segment closes → queue → background transcribe → UI updates while monitoring (manual **Transcribe** stays optional/debug).
+- VAD finished segment → **`mpsc`** → dedicated Whisper worker thread (never block cpal); `transcript-ready` (or similar) + app state.
 - **VAD pre-roll (observed):** segments cut in on the first loud 20 ms frame — replay sounds correct but **starts abruptly**; Whisper often garbles the **first words** (e.g. “eins zwei” → “ein sei”). Not a loudness issue when replay is intelligible.
   - Add ~**200–300 ms** ring pre-roll at 16 kHz prepended when speech is confirmed (or constant rolling buffer while monitoring).
   - Optional **speech onset**: require **2–3 consecutive** speech frames before `recording` starts (tune with pre-roll so word attacks are not clipped).
