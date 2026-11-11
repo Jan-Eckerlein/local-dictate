@@ -60,7 +60,7 @@ pnpm download-model
 | File | `models/ggml-base.bin` |
 | Source | [ggerganov/whisper.cpp on Hugging Face](https://huggingface.co/ggerganov/whisper.cpp) |
 
-Other sizes (download only; UI model picker planned):
+Other sizes — download, then pick **Whisper model** in Settings (tiny / base / small):
 
 ```bash
 WHISPER_MODEL=ggml-small.bin pnpm download-model
@@ -78,7 +78,7 @@ pnpm tauri dev
 ## Usage
 
 1. Pick a microphone (if several are listed).
-2. Adjust **VAD sensitivity** and **Whisper language** (auto / German / English) — stored in app data (see [Settings](#settings)).
+2. Adjust **VAD sensitivity**, **Whisper model** (tiny / base / small, file must exist on disk), and **Whisper language** (auto / German / English) — stored in app data (see [Settings](#settings)).
 3. **Start monitoring**, speak in short phrases, pause between them.
 4. Focus another app and use a paste shortcut (or the UI buttons).
 
@@ -108,15 +108,17 @@ The app can open the relevant System Settings panes from toasts (mic / accessibi
 ## Build (release)
 
 ```bash
-pnpm download-model   # if not already done
-pnpm tauri build
+pnpm download-all-models   # release bundle includes tiny + base + small
+pnpm tauri build --config src-tauri/tauri.bundle.conf.json
 ```
+
+Day-to-day dev only needs base: `pnpm download-model` then `pnpm tauri dev`.
 
 Artifacts land under `src-tauri/target/release/bundle/` (`.app` and `.dmg` on Apple Silicon).
 
 **macOS minimum:** 11.0 (set in `tauri.conf.json` and `src-tauri/.cargo/config.toml` so whisper.cpp can compile with C++17 `std::filesystem`).
 
-On a **fresh clone**, run `pnpm install`, download the model, and ensure Xcode CLI tools / Rust are installed before building. **CI workflow artifacts** are unsigned smoke builds without the model; **tagged GitHub Releases** download the model during the workflow and bundle `ggml-base.bin` inside the app.
+On a **fresh clone**, run `pnpm install`, download the base model (`pnpm download-model`), and ensure Xcode CLI tools / Rust are installed before `pnpm tauri dev` or a quick `pnpm tauri build`. **Tagged releases** and CI use `tauri.bundle.conf.json` and `pnpm download-all-models` to ship all three models in the DMG.
 
 ### CI
 
@@ -142,7 +144,7 @@ git push origin v0.1.0
 
 That runs [`.github/workflows/release.yml`](.github/workflows/release.yml) and attaches the macOS `.dmg` to the GitHub **Release** for that tag. Tags like `v0.1.0-rc.1` are marked **pre-release**.
 
-Tagged releases **include** `ggml-base.bin` in the app bundle (~150 MB DMG). Dev/CI artifacts do not.
+Tagged releases **include** `ggml-tiny.bin`, `ggml-base.bin`, and `ggml-small.bin` in the app bundle (DMG ~0.7 GB plus app). **Default model** in settings is still **base**.
 
 **Unsigned DMG from GitHub:** if macOS says the app is “damaged”, clear quarantine after install: `xattr -cr /Applications/local-dictate.app` (or right‑click → Open once).
 
@@ -239,14 +241,16 @@ Persisted file (macOS):
 | `src/` | React UI (Vite) |
 | `src-tauri/src/` | Rust backend |
 | `models/` | Downloaded `ggml-*.bin` (gitignored) |
-| `scripts/download-whisper-model.sh` | Model download helper |
+| `scripts/download-whisper-model.sh` | Download one model (`WHISPER_MODEL`) |
+| `src-tauri/tauri.bundle.conf.json` | Merge config: bundle all three models for release builds |
+| `scripts/download-all-whisper-models.sh` | tiny + base + small (release / full `tauri build`) |
 
 ---
 
 ## Known limitations
 
 - **macOS-first** — primary development and testing target.
-- **Single default model file** (`ggml-base.bin`); multi-model UI is tracked in `PLAN.md` (#16).
+- **Default STT model** is **base**; tiny/small ship in tagged releases or via `pnpm download-all-models`.
 - **Global shortcuts** while monitoring depend on OS shortcut registration; conflicts with other apps are possible.
 - Very quiet mics may still need physical gain despite peak normalization.
 

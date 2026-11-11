@@ -62,9 +62,18 @@ interface SessionSegmentSummary {
 }
 
 interface WhisperModelInfo {
+  filename: string;
   path: string;
   exists: boolean;
   loaded: boolean;
+  envOverride: boolean;
+}
+
+interface WhisperModelOption {
+  filename: string;
+  label: string;
+  exists: boolean;
+  path: string;
 }
 
 interface TranscriptResult {
@@ -87,6 +96,7 @@ type WhisperLanguage = "auto" | "de" | "en";
 interface AppSettings {
   vadRmsThreshold: number;
   whisperLanguage: WhisperLanguage;
+  whisperModel: string;
 }
 
 function App() {
@@ -111,6 +121,9 @@ function App() {
   const [whisperModel, setWhisperModel] = useState<WhisperModelInfo | null>(
     null,
   );
+  const [whisperModelOptions, setWhisperModelOptions] = useState<
+    WhisperModelOption[]
+  >([]);
   const [sttPendingIndex, setSttPendingIndex] = useState<number | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [axStatus, setAxStatus] = useState("");
@@ -132,23 +145,36 @@ function App() {
     );
   }, []);
 
+  const refreshWhisperModel = useCallback(() => {
+    void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
+    void invoke<WhisperModelOption[]>("list_whisper_models").then(
+      setWhisperModelOptions,
+    );
+  }, []);
+
   useEffect(() => {
     refreshMicStatus();
     refreshAxStatus();
     refreshLatestTranscript();
-    void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
+    refreshWhisperModel();
     void invoke<AppSettings>("get_app_settings").then(setAppSettings);
     void invoke<string>("request_microphone_permission").then(setMicStatus);
-  }, [refreshMicStatus, refreshAxStatus, refreshLatestTranscript]);
+  }, [
+    refreshMicStatus,
+    refreshAxStatus,
+    refreshLatestTranscript,
+    refreshWhisperModel,
+  ]);
 
   // Keep mic / Accessibility TCC in sync with System Settings (toast can clear).
   useEffect(() => {
     const id = window.setInterval(() => {
       refreshMicStatus();
       refreshAxStatus();
+      refreshWhisperModel();
     }, 1500);
     return () => window.clearInterval(id);
-  }, [refreshMicStatus, refreshAxStatus]);
+  }, [refreshMicStatus, refreshAxStatus, refreshWhisperModel]);
 
   const updateVadThreshold = useCallback(async (vadRmsThreshold: number) => {
     try {
@@ -174,6 +200,18 @@ function App() {
     },
     [],
   );
+
+  const updateWhisperModel = useCallback(async (whisperModel: string) => {
+    try {
+      const next = await invoke<AppSettings>("update_app_settings", {
+        whisperModel,
+      });
+      setAppSettings(next);
+      refreshWhisperModel();
+    } catch (e) {
+      notifyFromRaw(String(e));
+    }
+  }, [refreshWhisperModel]);
 
   const loadDevices = useCallback(async () => {
     try {
@@ -236,9 +274,7 @@ function App() {
           setSttPendingIndex((pending) =>
             pending === segmentIndex ? null : pending,
           );
-          void invoke<WhisperModelInfo>("whisper_model_info").then(
-            setWhisperModel,
-          );
+          refreshWhisperModel();
         },
       );
       if (cancelled) {
@@ -279,7 +315,7 @@ function App() {
       void unlistenTranscriptErr?.();
       void unlistenPasteErr?.();
     };
-  }, []);
+  }, [refreshWhisperModel]);
 
   const openSettings = useCallback(() => {
     void invoke("open_microphone_settings").then(refreshMicStatus);
@@ -355,13 +391,13 @@ function App() {
         ...prev,
         [result.segmentIndex]: result.text,
       }));
-      void invoke<WhisperModelInfo>("whisper_model_info").then(setWhisperModel);
+      refreshWhisperModel();
     } catch (e) {
       notifyFromRaw(String(e));
     } finally {
       setTranscribingIndex(null);
     }
-  }, []);
+  }, [refreshWhisperModel]);
 
   const replaySegment = useCallback(async (index: number) => {
     setReplayingIndex(index);
@@ -405,8 +441,11 @@ function App() {
       dismissAppToast(TOAST_ID.model);
       return;
     }
+    const hint = whisperModel.envOverride
+      ? "LOCAL_DICTATE_WHISPER_MODEL is set — fix or unset that path."
+      : `Download with WHISPER_MODEL=${whisperModel.filename} pnpm download-model (dev) or place the file under Application Support/models/.`;
     showAppToast(
-      `Whisper model not found. Expected at: ${whisperModel.path}. For a dev build run pnpm download-model; release builds should bundle the model — reinstall the latest DMG or place ggml-base.bin under Application Support.`,
+      `Whisper model not found (${whisperModel.filename}). Expected at: ${whisperModel.path}. ${hint}`,
       "error",
       { id: TOAST_ID.model },
     );
@@ -563,6 +602,49 @@ function App() {
               {monitoring && (
                 <p className="text-muted-foreground text-xs">
                   VAD threshold applies on the next monitoring start.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whisper-model">Whisper model</Label>
+              <Select
+                value={appSettings.whisperModel}
+                disabled={whisperModel?.envOverride}
+                onValueChange={(v) => {
+                  if (v) void updateWhisperModel(v);
+                }}
+              >
+                <SelectTrigger id="whisper-model" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(whisperModelOptions.length > 0
+                    ? whisperModelOptions
+                    : [
+                        {
+                          filename: "ggml-base.bin",
+                          label: "Base (~141 MB)",
+                          exists: true,
+                          path: "",
+                        },
+                      ]
+                  ).map((opt) => (
+                    <SelectItem key={opt.filename} value={opt.filename}>
+                      {opt.label}
+                      {!opt.exists ? " — not on disk" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {whisperModel && (
+                <p className="text-muted-foreground text-xs wrap-break-word">
+                  {whisperModel.envOverride
+                    ? "Model path overridden by LOCAL_DICTATE_WHISPER_MODEL."
+                    : whisperModel.exists
+                      ? whisperModel.loaded
+                        ? `Loaded from ${whisperModel.path}`
+                        : `Ready at ${whisperModel.path} (loads on next segment)`
+                      : `Missing — run WHISPER_MODEL=${whisperModel.filename} pnpm download-model`}
                 </p>
               )}
             </div>

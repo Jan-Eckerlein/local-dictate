@@ -68,7 +68,7 @@ flowchart TB
 | ---------- | --------------------------------- | ------------------------------------------------------------------------------------- |
 | Platform   | macOS                             | Windows documented as untested unless time allows                                     |
 | STT        | `whisper-rs` + ggml on disk       | Model **not** in git; download script; language **auto/de/en** in settings.json       |
-| Model size | `base` (default)                  | `pnpm download-model` / env; **UI selector at #16** (tiny/base/small, files on disk)  |
+| Model size | `base` (default)                  | Release bundles tiny+base+small; dev: `download-model` / `download-all-models`        |
 | VAD        | RMS + silence hang + max duration | Default **0.008**; user threshold in `app_data_dir/settings.json`                     |
 | Paste      | Clipboard + simulated ⌘V          | **⌘⇧V** / **⌘⇧B** / **⌘⇧A**; Accessibility required (macOS)                           |
 | UI         | Small window + meter              | Minimal HTML/CSS for milestones 4–11; **shadcn** + Tailwind at **#12**; tray deferred |
@@ -102,7 +102,7 @@ Each step should compile or be an obvious WIP milestone.
 | 13  | UI state machine + error / permission hints                                                                                        | done                |
 | 14  | README (build, model, shortcuts, architecture) + `docs/ai-usage.md`                                                                | done                |
 | 15  | Release build (`pnpm tauri build`) + known limitations                                                                             | done                |
-| 16  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | todo                |
+| 16  | Whisper **model** setting: persist choice (e.g. tiny/base/small), pick among downloaded `models/*.bin`, reload engine when changed | done                |
 
 ### Milestone #10 notes (VAD pre-roll)
 

@@ -1,5 +1,5 @@
 use crate::segment::VAD_RMS_THRESHOLD;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -26,11 +26,73 @@ impl WhisperLanguage {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WhisperModelFile {
+    Tiny,
+    Base,
+    Small,
+}
+
+impl WhisperModelFile {
+    pub const ALL: [Self; 3] = [Self::Tiny, Self::Base, Self::Small];
+
+    pub fn filename(self) -> &'static str {
+        match self {
+            Self::Tiny => "ggml-tiny.bin",
+            Self::Base => "ggml-base.bin",
+            Self::Small => "ggml-small.bin",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Tiny => "Tiny (~75 MB)",
+            Self::Base => "Base (~141 MB)",
+            Self::Small => "Small (~465 MB)",
+        }
+    }
+
+    pub fn from_filename(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|m| m.filename() == name)
+    }
+}
+
+impl Default for WhisperModelFile {
+    fn default() -> Self {
+        Self::Base
+    }
+}
+
+impl Serialize for WhisperModelFile {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.filename())
+    }
+}
+
+impl<'de> Deserialize<'de> for WhisperModelFile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        Self::from_filename(&raw).ok_or_else(|| {
+            serde::de::Error::custom(format!("unknown whisper model file: {raw}"))
+        })
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub vad_rms_threshold: f32,
     pub whisper_language: WhisperLanguage,
+    #[serde(default)]
+    pub whisper_model: WhisperModelFile,
 }
 
 impl Default for AppSettings {
@@ -38,6 +100,7 @@ impl Default for AppSettings {
         Self {
             vad_rms_threshold: VAD_RMS_THRESHOLD,
             whisper_language: WhisperLanguage::Auto,
+            whisper_model: WhisperModelFile::Base,
         }
     }
 }
@@ -86,6 +149,7 @@ impl SettingsState {
         &self,
         vad_rms_threshold: Option<f32>,
         whisper_language: Option<WhisperLanguage>,
+        whisper_model: Option<WhisperModelFile>,
     ) -> Result<AppSettings, String> {
         let mut guard = self
             .inner
@@ -96,6 +160,9 @@ impl SettingsState {
         }
         if let Some(lang) = whisper_language {
             guard.whisper_language = lang;
+        }
+        if let Some(model) = whisper_model {
+            guard.whisper_model = model;
         }
         *guard = normalize(guard.clone());
         drop(guard);

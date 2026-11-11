@@ -37,9 +37,9 @@ jobs:
           workspaces: src-tauri
           shared-key: macos-arm64-metal-link
       - run: pnpm install --frozen-lockfile
-      - name: Download Whisper model for bundle
-        run: pnpm download-model
-      - run: pnpm tauri build
+      - name: Download Whisper models for bundle
+        run: pnpm download-all-models
+      - run: pnpm tauri build --config src-tauri/tauri.bundle.conf.json
       - name: Collect bundle paths
         id: bundle
         run: |

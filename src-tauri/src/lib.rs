@@ -12,8 +12,8 @@ mod transcript_buffer;
 
 use audio::{list_input_devices, start_monitor, stop_monitor, AudioMonitorInfo, InputDeviceInfo};
 use segment::AudioSegmentPayload;
-use settings::{AppSettings, SettingsState, WhisperLanguage};
-use stt::{SttState, WhisperModelInfo};
+use settings::{AppSettings, SettingsState, WhisperLanguage, WhisperModelFile};
+use stt::{list_whisper_model_options, SttState, WhisperModelInfo, WhisperModelOption};
 use stt_worker::{spawn_stt_worker, SttJob};
 use transcript_buffer::{PasteScope, TranscriptBuffer};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -181,9 +181,10 @@ fn get_app_settings(settings: State<'_, SettingsState>) -> Result<AppSettings, S
 fn update_app_settings(
     vad_rms_threshold: Option<f32>,
     whisper_language: Option<WhisperLanguage>,
+    whisper_model: Option<WhisperModelFile>,
     settings: State<'_, SettingsState>,
 ) -> Result<AppSettings, String> {
-    settings.update(vad_rms_threshold, whisper_language)
+    settings.update(vad_rms_threshold, whisper_language, whisper_model)
 }
 
 #[tauri::command]
@@ -212,8 +213,16 @@ fn list_session_segments(
 }
 
 #[tauri::command]
-fn whisper_model_info(stt: State<'_, Arc<SttState>>) -> WhisperModelInfo {
-    stt.model_info()
+fn whisper_model_info(
+    stt: State<'_, Arc<SttState>>,
+    settings: State<'_, SettingsState>,
+) -> Result<WhisperModelInfo, String> {
+    stt.model_info(&settings)
+}
+
+#[tauri::command]
+fn list_whisper_models(app: tauri::AppHandle) -> Vec<WhisperModelOption> {
+    list_whisper_model_options(&app)
 }
 
 /// Manual STT (debug); auto pipeline uses `transcript-ready` events while monitoring.
@@ -390,6 +399,7 @@ pub fn run() {
             paste_all_transcripts,
             list_session_segments,
             whisper_model_info,
+            list_whisper_models,
             transcribe_session_segment,
             replay_session_segment,
             start_audio_monitor,

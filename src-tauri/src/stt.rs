@@ -1,5 +1,5 @@
 use crate::segment::normalize_peak_for_stt;
-use crate::settings::{SettingsState, WhisperLanguage};
+use crate::settings::{SettingsState, WhisperLanguage, WhisperModelFile};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, path::BaseDirectory};
@@ -8,12 +8,11 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 pub const DEFAULT_MODEL_FILE: &str = "ggml-base.bin";
 
 /// Override with `LOCAL_DICTATE_WHISPER_MODEL` (absolute path).
-pub fn resolve_model_path(app: &AppHandle) -> PathBuf {
+pub fn resolve_model_path(app: &AppHandle, filename: &str) -> PathBuf {
     if let Ok(path) = std::env::var("LOCAL_DICTATE_WHISPER_MODEL") {
         return PathBuf::from(path);
     }
 
-    let filename = DEFAULT_MODEL_FILE;
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     let resource_names = [
@@ -53,12 +52,43 @@ pub fn resolve_model_path(app: &AppHandle) -> PathBuf {
         })
 }
 
+pub fn whisper_model_env_override() -> bool {
+    std::env::var("LOCAL_DICTATE_WHISPER_MODEL").is_ok()
+}
+
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WhisperModelInfo {
+    pub filename: String,
     pub path: String,
     pub exists: bool,
     pub loaded: bool,
+    pub env_override: bool,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WhisperModelOption {
+    pub filename: String,
+    pub label: String,
+    pub exists: bool,
+    pub path: String,
+}
+
+pub fn list_whisper_model_options(app: &AppHandle) -> Vec<WhisperModelOption> {
+    WhisperModelFile::ALL
+        .iter()
+        .map(|m| {
+            let filename = m.filename();
+            let path = resolve_model_path(app, filename);
+            WhisperModelOption {
+                filename: filename.to_string(),
+                label: m.label().to_string(),
+                exists: path.exists(),
+                path: path.display().to_string(),
+            }
+        })
+        .collect()
 }
 
 pub struct WhisperEngine {
@@ -69,7 +99,7 @@ impl WhisperEngine {
     pub fn load(path: &Path) -> Result<Self, String> {
         if !path.exists() {
             return Err(format!(
-                "model not found at {} — download ggml-base.bin into app Resources, app data models/, or repo models/",
+                "model not found at {} — download with pnpm download-model (see README)",
                 path.display()
             ));
         }
@@ -131,45 +161,70 @@ impl WhisperEngine {
 }
 
 pub struct SttState {
-    model_path: PathBuf,
+    app: AppHandle,
+    active_path: Mutex<PathBuf>,
     engine: Mutex<Option<WhisperEngine>>,
 }
 
 impl SttState {
     pub fn new(app: &AppHandle) -> Self {
+        let path = resolve_model_path(app, DEFAULT_MODEL_FILE);
         Self {
-            model_path: resolve_model_path(app),
+            app: app.clone(),
+            active_path: Mutex::new(path),
             engine: Mutex::new(None),
         }
     }
 
-    pub fn model_info(&self) -> WhisperModelInfo {
+    pub fn model_info(&self, settings: &SettingsState) -> Result<WhisperModelInfo, String> {
+        let filename = settings.get()?.whisper_model.filename();
+        let path = resolve_model_path(&self.app, filename);
         let loaded = self
             .engine
             .lock()
             .map(|g| g.is_some())
             .unwrap_or(false);
-        WhisperModelInfo {
-            path: self.model_path.display().to_string(),
-            exists: self.model_path.exists(),
-            loaded,
-        }
+        let active = self
+            .active_path
+            .lock()
+            .map(|p| *p == path)
+            .unwrap_or(false);
+        Ok(WhisperModelInfo {
+            filename: filename.to_string(),
+            path: path.display().to_string(),
+            exists: path.exists(),
+            loaded: loaded && active,
+            env_override: whisper_model_env_override(),
+        })
     }
 
-    fn ensure_loaded(&self) -> Result<(), String> {
+    fn ensure_loaded(&self, settings: &SettingsState) -> Result<(), String> {
+        let filename = settings.get()?.whisper_model.filename();
+        let path = resolve_model_path(&self.app, filename);
+
+        let mut active = self
+            .active_path
+            .lock()
+            .map_err(|_| "stt path lock poisoned".to_string())?;
         let mut guard = self
             .engine
             .lock()
             .map_err(|_| "stt lock poisoned".to_string())?;
+
+        if *active != path {
+            *guard = None;
+            *active = path;
+        }
+
         if guard.is_none() {
-            *guard = Some(WhisperEngine::load(&self.model_path)?);
+            *guard = Some(WhisperEngine::load(&active)?);
         }
         Ok(())
     }
 
     pub fn transcribe(&self, samples: &[f32], settings: &SettingsState) -> Result<String, String> {
         let language = settings.get()?.whisper_language;
-        self.ensure_loaded()?;
+        self.ensure_loaded(settings)?;
         let guard = self
             .engine
             .lock()
